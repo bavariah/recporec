@@ -31,23 +31,39 @@ export function LeaderboardModal({ entries, loading, onClose }: LeaderboardModal
           <p>Резултати ће се овде појавити аутоматски.</p>
         </div>
       ) : (
-        <div className="leaderboard-table-wrap">
-          <table className="leaderboard-table">
-            <thead><tr><th>#</th><th>Играч</th><th>Партије</th><th>П / И</th><th>Поени</th><th>Просек</th></tr></thead>
-            <tbody>
-              {entries.map((entry, index) => (
-                <tr key={entry.user_id}>
-                  <td><span className={`rank rank-${index + 1}`}>{index + 1}</span></td>
-                  <th scope="row">{entry.display_name}</th>
-                  <td>{entry.total_games}</td>
-                  <td>{entry.wins} / {entry.losses}</td>
-                  <td><strong>{entry.total_points}</strong></td>
-                  <td>{Number(entry.average_points).toFixed(1)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="leaderboard-table-wrap">
+            <table className="leaderboard-table">
+              <thead><tr><th>#</th><th>Играч</th><th>Партије</th><th>П / И</th><th>Поени</th><th>Просек</th></tr></thead>
+              <tbody>
+                {entries.map((entry, index) => (
+                  <tr key={entry.user_id}>
+                    <td><span className={`rank rank-${index + 1}`}>{index + 1}</span></td>
+                    <th scope="row">{entry.display_name}</th>
+                    <td>{entry.total_games}</td>
+                    <td>{entry.wins} / {entry.losses}</td>
+                    <td><strong>{entry.total_points}</strong></td>
+                    <td>{Number(entry.average_points).toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="leaderboard-cards">
+            {entries.map((entry, index) => (
+              <article className="leaderboard-card" key={entry.user_id}>
+                <span className={`rank rank-${index + 1}`}>{index + 1}</span>
+                <strong>{entry.display_name}</strong>
+                <dl>
+                  <div><dt>Партије</dt><dd>{entry.total_games}</dd></div>
+                  <div><dt>П / И</dt><dd>{entry.wins} / {entry.losses}</dd></div>
+                  <div><dt>Поени</dt><dd>{entry.total_points}</dd></div>
+                  <div><dt>Просек</dt><dd>{Number(entry.average_points).toFixed(1)}</dd></div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </>
       )}
     </AppModal>
   );

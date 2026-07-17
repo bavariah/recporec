@@ -1,7 +1,7 @@
 import type { PremiumType, SerbianLetter } from "./types";
 
 export const BOARD_SIZE = 8;
-export const RACK_SIZE = 7;
+export const RACK_SIZE = 8;
 
 // An even board has four visual centre squares. We use the upper-left one as
 // the start square so the opening rule remains deterministic.

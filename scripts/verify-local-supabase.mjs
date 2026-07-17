@@ -161,11 +161,36 @@ const { data: movedState, error: moveError } = await playerOne.rpc(
 );
 if (moveError) throw moveError;
 
+const { data: playerTwoState, error: playerTwoStateError } = await playerTwo.rpc(
+  "get_match_state",
+  { p_match_id: createdMatch.match_id },
+);
+if (playerTwoStateError) throw playerTwoStateError;
+
+const { data: exchangeState, error: exchangeError } = await playerTwo.rpc(
+  "exchange_match_tiles",
+  {
+    p_match_id: createdMatch.match_id,
+    p_expected_version: movedState.match.version,
+    p_tile_ids: [playerTwoState.rack[0].id],
+  },
+);
+if (exchangeError) throw exchangeError;
+
+const { error: repeatedExchangeError } = await playerTwo.rpc(
+  "exchange_match_tiles",
+  {
+    p_match_id: createdMatch.match_id,
+    p_expected_version: exchangeState.match.version,
+    p_tile_ids: [exchangeState.rack[0].id],
+  },
+);
+
 const { data: passedState, error: passError } = await playerTwo.rpc(
   "pass_match_turn",
   {
     p_match_id: createdMatch.match_id,
-    p_expected_version: movedState.match.version,
+    p_expected_version: exchangeState.match.version,
   },
 );
 if (passError) throw passError;
@@ -188,7 +213,7 @@ if (finalPassError) throw finalPassError;
 
 const { data: participants, error: participantsError } = await playerOne
   .from("match_players")
-  .select("user_id, seat, score")
+  .select("user_id, seat, score, exchange_used")
   .eq("match_id", createdMatch.match_id)
   .order("seat");
 if (participantsError) throw participantsError;
@@ -211,31 +236,45 @@ const { error: privateStateError } = await playerOne
   .select("bag")
   .eq("match_id", createdMatch.match_id);
 
-if (
-  !dictionary?.find((entry) => entry.word === "забуна")?.accepted ||
-  dictionary?.find((entry) => entry.word === "тест-реч")?.accepted ||
-  participants?.length !== 2 ||
-  realtimeState.status !== "active" ||
-  initialState.rack.length !== 7 ||
-  initialState.bag_count !== 90 ||
-  movedState.rack.length !== 7 ||
-  movedState.match.current_player_id !== secondUser.id ||
-  passedState.match.current_player_id !== firstUser.id ||
-  passedState.match.consecutive_passes !== 1 ||
-  completedState.match.status !== "completed" ||
-  completedState.match.winner_id !== firstUser.id ||
-  moves?.length !== 1 ||
-  moves[0].formed_words[0].toLowerCase() !== acceptedOpening.word ||
-  leaderboard?.length !== 2 ||
-  leaderboard[0].user_id !== firstUser.id ||
-  leaderboard[0].total_games !== 1 ||
-  leaderboard[0].wins !== 1 ||
-  leaderboard[0].losses !== 0 ||
-  leaderboard[0].total_points !== moves[0].score_delta ||
-  leaderboard[1].losses !== 1 ||
-  !privateStateError
-) {
-  throw new Error("Local Supabase verification returned unexpected data or permissions.");
+const winnerLeaderboardEntry = leaderboard?.find((entry) => entry.user_id === firstUser.id);
+const loserLeaderboardEntry = leaderboard?.find((entry) => entry.user_id === secondUser.id);
+
+const checks = {
+  dictionaryAcceptsKnownWord: dictionary?.find((entry) => entry.word === "забуна")?.accepted,
+  dictionaryRejectsInvalidWord: !dictionary?.find((entry) => entry.word === "тест-реч")?.accepted,
+  participantCount: participants?.length === 2,
+  realtimeConnected: realtimeState.status === "active",
+  initialRackSize: initialState.rack.length === 8,
+  initialBagCount: initialState.bag_count === 88,
+  refilledRackSize: movedState.rack.length === 8,
+  turnPassedAfterMove: movedState.match.current_player_id === secondUser.id,
+  exchangeRackSize: exchangeState.rack.length === 8,
+  exchangeBagUnchanged: exchangeState.bag_count === movedState.bag_count,
+  exchangeKeepsTurn: exchangeState.match.current_player_id === secondUser.id,
+  exchangeMarkedUsed: exchangeState.players.find((player) => player.user_id === secondUser.id)?.exchange_used,
+  repeatedExchangeRejected: Boolean(repeatedExchangeError),
+  passChangesTurn: passedState.match.current_player_id === firstUser.id,
+  passCountIncremented: passedState.match.consecutive_passes === 1,
+  matchCompleted: completedState.match.status === "completed",
+  correctWinner: completedState.match.winner_id === firstUser.id,
+  onlyPlacementRecorded: moves?.length === 1,
+  openingWordRecorded: moves?.[0]?.formed_words?.[0]?.toLowerCase() === acceptedOpening.word,
+  leaderboardHasWinner: Boolean(winnerLeaderboardEntry),
+  leaderboardHasLoser: Boolean(loserLeaderboardEntry),
+  winnerGameCount: winnerLeaderboardEntry?.total_games === 1,
+  winnerWinCount: winnerLeaderboardEntry?.wins === 1,
+  winnerLossCount: winnerLeaderboardEntry?.losses === 0,
+  winnerPoints: winnerLeaderboardEntry?.total_points === moves?.[0]?.score_delta,
+  loserLossCount: loserLeaderboardEntry?.losses === 1,
+  privateStateProtected: Boolean(privateStateError),
+};
+
+const failedChecks = Object.entries(checks)
+  .filter(([, passed]) => !passed)
+  .map(([name]) => name);
+
+if (failedChecks.length > 0) {
+  throw new Error(`Supabase verification failed: ${failedChecks.join(", ")}`);
 }
 
 await playerOne.removeChannel(channel);
@@ -249,6 +288,8 @@ console.log(
       realtimeStatus: realtimeState.status,
       acceptedOpening: acceptedOpening.word,
       openingScore: moves[0].score_delta,
+      exchangeUsed: exchangeState.players.find((player) => player.user_id === secondUser.id)?.exchange_used,
+      repeatedExchangeRejected: Boolean(repeatedExchangeError),
       bagCount: movedState.bag_count,
       finalStatus: completedState.match.status,
       winnerId: completedState.match.winner_id,

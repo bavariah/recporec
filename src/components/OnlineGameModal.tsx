@@ -5,21 +5,36 @@ import { AppModal } from "@/components/AppModal";
 
 interface OnlineGameModalProps {
   activeCode: string | null;
+  displayName: string;
   loading: boolean;
   onClose: () => void;
   onCreate: (displayName: string) => Promise<void>;
+  onDisplayNameChange: (displayName: string) => void;
   onJoin: (displayName: string, inviteCode: string) => Promise<void>;
 }
 
 export function OnlineGameModal({
   activeCode,
+  displayName,
   loading,
   onClose,
   onCreate,
+  onDisplayNameChange,
   onJoin,
 }: OnlineGameModalProps) {
-  const [displayName, setDisplayName] = useState("Играч");
   const [inviteCode, setInviteCode] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  function rememberName() {
+    return displayName.trim();
+  }
+
+  async function copyInviteCode() {
+    if (!activeCode) return;
+    await navigator.clipboard.writeText(activeCode);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  }
 
   return (
     <AppModal eyebrow="ИГРА УДВОЈЕ" onClose={onClose} title="Онлајн партија">
@@ -28,6 +43,9 @@ export function OnlineGameModal({
           <span>ПОЗИВНИ КОД</span>
           <strong>{activeCode}</strong>
           <p>Пошаљи овај код другом играчу. Партија почиње чим се придружи.</p>
+          <button className="secondary-action modal-action invite-copy" onClick={copyInviteCode} type="button">
+            {copied ? "Код је копиран ✓" : "Копирај позивни код"}
+          </button>
           <button className="primary-action modal-action" onClick={onClose} type="button">
             Врати се на таблу <span>→</span>
           </button>
@@ -35,20 +53,23 @@ export function OnlineGameModal({
       ) : (
         <div className="online-form">
           <label>
-            <span>ИМЕ НА ТАБЛИ</span>
+            <span>КАКО ДА ТЕ ВИДИ РИВАЛ?</span>
             <input
+              autoFocus
               autoComplete="nickname"
               maxLength={24}
               minLength={2}
-              onChange={(event) => setDisplayName(event.target.value)}
+              onChange={(event) => onDisplayNameChange(event.target.value)}
+              placeholder="Унеси име"
               value={displayName}
             />
           </label>
+          <p className="online-name-note">Питаћемо те само први пут на овом уређају.</p>
 
           <button
             className="primary-action modal-action"
             disabled={loading || displayName.trim().length < 2}
-            onClick={() => onCreate(displayName.trim())}
+            onClick={() => onCreate(rememberName())}
             type="button"
           >
             {loading ? "Припрема…" : "Направи нову партију"} <span>→</span>
@@ -72,7 +93,7 @@ export function OnlineGameModal({
           <button
             className="secondary-action modal-action"
             disabled={loading || displayName.trim().length < 2 || inviteCode.length !== 6}
-            onClick={() => onJoin(displayName.trim(), inviteCode)}
+            onClick={() => onJoin(rememberName(), inviteCode)}
             type="button"
           >
             Придружи се партији

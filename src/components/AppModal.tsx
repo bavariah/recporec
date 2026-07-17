@@ -46,7 +46,7 @@ export function AppModal({ children, eyebrow, onClose, title, wide = false }: Ap
             <p>{eyebrow}</p>
             <h2 id="modal-title">{title}</h2>
           </div>
-          <button aria-label="Затвори" autoFocus className="modal-close" onClick={onClose} type="button">
+          <button aria-label="Затвори" className="modal-close" onClick={onClose} type="button">
             <span aria-hidden="true">×</span>
           </button>
         </header>

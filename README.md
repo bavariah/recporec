@@ -9,7 +9,7 @@ authoritative online turn engine remain the next deployment phase.
 
 - 8×8 responsive board with double/triple letter and word squares;
 - provisional Serbian Cyrillic 104-tile bag, including two configurable blanks;
-- seven-tile rack, placement, undo, refill, and new-game flow;
+- eight-tile rack with automatic refill, placement, undo, and one non-turn-ending exchange per player per game;
 - first-move, straight-line, gap, connection, and minimum-word validation;
 - cross-word scoring with premiums applied only to newly placed tiles;
 - fixed board and cell geometry, verified not to reflow when tiles are placed;

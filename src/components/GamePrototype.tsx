@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BOARD_SIZE,
@@ -20,6 +21,7 @@ import { createTileBag, drawTiles, shuffleTiles } from "@/game/tiles";
 import type { Board, RackTile, SerbianLetter } from "@/game/types";
 import { supabase } from "@/lib/supabase/client";
 import { LeaderboardModal, type LeaderboardEntry } from "@/components/LeaderboardModal";
+import { GameResultModal, type GameResultKind } from "@/components/GameResultModal";
 import { OnlineGameModal } from "@/components/OnlineGameModal";
 import { RulesModal } from "@/components/RulesModal";
 
@@ -33,6 +35,7 @@ interface DictionaryCheckResult {
 interface GameState {
   board: Board;
   bag: RackTile[];
+  exchangeUsed: boolean;
   rack: RackTile[];
   score: number;
   turn: number;
@@ -42,6 +45,7 @@ interface OnlinePlayer {
   user_id: string;
   seat: number;
   score: number;
+  exchange_used: boolean;
   display_name: string;
 }
 
@@ -84,6 +88,7 @@ function buildNewGame(random: () => number = Math.random): GameState {
   return {
     board: createEmptyBoard(),
     bag: firstDraw.bag,
+    exchangeUsed: false,
     rack: firstDraw.drawn,
     score: 0,
     turn: 1,
@@ -95,6 +100,8 @@ export function GamePrototype() {
     buildNewGame(seededRandom(16072026)),
   );
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
+  const [exchangeMode, setExchangeMode] = useState(false);
+  const [exchangeTileIds, setExchangeTileIds] = useState<string[]>([]);
   const [blankLetter, setBlankLetter] = useState<SerbianLetter | null>(null);
   const [notice, setNotice] = useState(
     "Постави прву реч преко звезде. Локални речник ће проверити потез.",
@@ -107,9 +114,11 @@ export function GamePrototype() {
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [onlineModalOpen, setOnlineModalOpen] = useState(false);
+  const [onlineDisplayName, setOnlineDisplayName] = useState("");
   const [onlineLoading, setOnlineLoading] = useState(false);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [onlineState, setOnlineState] = useState<OnlineMatchState | null>(null);
+  const [resultModalOpen, setResultModalOpen] = useState(false);
 
   const applyOnlineMatchState = useCallback((nextState: OnlineMatchState) => {
     setOnlineState(nextState);
@@ -126,11 +135,14 @@ export function GamePrototype() {
     }));
     setSelectedTileId(null);
     setBlankLetter(null);
+    setExchangeMode(false);
+    setExchangeTileIds([]);
     if (nextState.match.status !== "waiting") setOnlineModalOpen(false);
 
     if (nextState.match.status === "waiting") {
       setNotice("Партија је направљена. Пошаљи позивни код другом играчу.");
     } else if (nextState.match.status === "completed") {
+      setResultModalOpen(true);
       setNotice(
         nextState.match.winner_id === null
           ? "Партија је завршена нерешеним резултатом."
@@ -170,7 +182,7 @@ export function GamePrototype() {
         if (error) {
           if (active) {
             setBackendStatus("offline");
-            setNotice(`Локални Supabase није доступан: ${error.message}`);
+            setNotice(`Сервис за игру тренутно није доступан: ${error.message}`);
           }
           return;
         }
@@ -251,25 +263,66 @@ export function GamePrototype() {
   const opponentIsActive = Boolean(
     !matchComplete && isOnline && onlineState?.match.status === "active" && !canPlayOnline,
   );
+  const exchangeUsed = isOnline ? (viewer?.exchange_used ?? true) : game.exchangeUsed;
+  const bagCount = onlineState?.bag_count ?? game.bag.length;
+  const exchangeAvailable = Boolean(
+    !matchComplete && playerIsActive && !exchangeUsed && bagCount > 0 && pendingCount === 0,
+  );
+  const resultKind: GameResultKind = isOnline
+    ? onlineState?.match.winner_id === null
+      ? "draw"
+      : onlineState?.match.winner_id === onlineState?.viewer_id
+        ? "win"
+        : "lose"
+    : "summary";
 
   function resetSelection() {
     setSelectedTileId(null);
     setBlankLetter(null);
   }
 
+  function cancelExchange() {
+    setExchangeMode(false);
+    setExchangeTileIds([]);
+    setNotice("Замена је отказана. Изабери слово за потез.");
+  }
+
+  function beginExchange() {
+    if (!exchangeAvailable) {
+      setNotice(exchangeUsed ? "Замену слова си већ искористио у овој партији." : "Слова сада не могу да се замене.");
+      return;
+    }
+    resetSelection();
+    setExchangeMode(true);
+    setExchangeTileIds([]);
+    setNotice("Изабери слова која желиш да замениш, па потврди. После замене настављаш исти потез.");
+  }
+
   function startNewGame() {
     setActiveMatchId(null);
     setOnlineState(null);
+    setResultModalOpen(false);
     setGame(buildNewGame());
     resetSelection();
     setNotice("Нова партија је спремна. Прва реч иде преко звезде.");
   }
 
+  function openOnlineLobby() {
+    setOnlineDisplayName((current) => current || window.localStorage.getItem("skrabaj-display-name") || "");
+    setOnlineModalOpen(true);
+  }
+
+  function openNewOnlineGame() {
+    startNewGame();
+    openOnlineLobby();
+  }
+
   async function createOnlineMatch(displayName: string) {
     if (!supabase || backendStatus !== "ready") {
-      setNotice("Локални Supabase мора бити повезан за онлајн партију.");
+      setNotice("Потребна је веза са сервисом за онлајн партију.");
       return;
     }
+    window.localStorage.setItem("skrabaj-display-name", displayName);
     setOnlineLoading(true);
     const { data, error } = await supabase.rpc("create_match", {
       p_display_name: displayName,
@@ -293,9 +346,10 @@ export function GamePrototype() {
 
   async function joinOnlineMatch(displayName: string, inviteCode: string) {
     if (!supabase || backendStatus !== "ready") {
-      setNotice("Локални Supabase мора бити повезан за онлајн партију.");
+      setNotice("Потребна је веза са сервисом за онлајн партију.");
       return;
     }
+    window.localStorage.setItem("skrabaj-display-name", displayName);
     setOnlineLoading(true);
     const { data, error } = await supabase.rpc("join_match", {
       p_display_name: displayName,
@@ -334,6 +388,50 @@ export function GamePrototype() {
     setSubmitting(false);
   }
 
+  async function exchangeSelectedTiles() {
+    if (submitting || exchangeTileIds.length === 0) return;
+    setSubmitting(true);
+
+    if (isOnline && onlineState) {
+      const { data, error } = await supabase!.rpc("exchange_match_tiles", {
+        p_match_id: onlineState.match.id,
+        p_expected_version: onlineState.match.version,
+        p_tile_ids: exchangeTileIds,
+      });
+      if (error) {
+        setNotice(`Замена није успела: ${error.message}`);
+      } else {
+        applyOnlineMatchState(data as OnlineMatchState);
+        setNotice("Слова су замењена. Настави потез са новим словима.");
+      }
+      setSubmitting(false);
+      return;
+    }
+
+    const selected = new Set(exchangeTileIds);
+    const returnedTiles = game.rack.filter((tile) => selected.has(tile.id));
+    const replacement = drawTiles(game.bag, returnedTiles.length);
+    if (replacement.drawn.length !== returnedTiles.length) {
+      setSubmitting(false);
+      setNotice("У врећици нема довољно слова за замену.");
+      return;
+    }
+
+    setGame((current) => ({
+      ...current,
+      bag: [...replacement.bag, ...returnedTiles],
+      exchangeUsed: true,
+      rack: [
+        ...current.rack.filter((tile) => !selected.has(tile.id)),
+        ...replacement.drawn,
+      ],
+    }));
+    setExchangeMode(false);
+    setExchangeTileIds([]);
+    setNotice("Слова су замењена. Настави исти потез; замена за ову партију је искоришћена.");
+    setSubmitting(false);
+  }
+
   async function openLeaderboard() {
     setOpenModal("leaderboard");
     if (!supabase) return;
@@ -355,6 +453,15 @@ export function GamePrototype() {
     }
     if (isOnline && !canPlayOnline) {
       setNotice("Сачекај ривалов потез.");
+      return;
+    }
+    if (exchangeMode) {
+      setExchangeTileIds((current) =>
+        current.includes(tile.id)
+          ? current.filter((tileId) => tileId !== tile.id)
+          : [...current, tile.id],
+      );
+      setNotice("Изабери сва слова за замену, па потврди на дну екрана.");
       return;
     }
     setSelectedTileId((current) => (current === tile.id ? null : tile.id));
@@ -425,6 +532,7 @@ export function GamePrototype() {
       board: nextBoard,
       rack: current.rack.filter((tile) => tile.id !== selectedTile.id),
     }));
+    if (game.turn >= MAX_TURNS) setResultModalOpen(true);
     resetSelection();
     setNotice(`Постављено: ${letter}.`);
   }
@@ -546,38 +654,26 @@ export function GamePrototype() {
   return (
     <main className="game-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Шкрабај, почетак">
-          <span className="brand-mark" aria-hidden="true">
-            <b>Ш</b>
-            <small>КРАБАЈ</small>
-          </span>
-          <span className="brand-copy">
-            <strong>ШКРАБАЈ</strong>
-            <small>српска игра речи</small>
-          </span>
-        </a>
+        <Image className="brand-logo" alt="Шкрабај" height={961} priority src="/skrabaj.png" width={1693} />
 
         <div className="topbar-actions">
-          <span className="prototype-pill">
-            <span className="status-dot" />
-            {backendStatus === "ready"
-              ? "локални Supabase"
-              : backendStatus === "connecting"
-                ? "повезивање"
-                : "офлајн прототип"}
-          </span>
-          <button className="nav-button nav-button--online" onClick={() => setOnlineModalOpen(true)} type="button">
-            Онлајн
+          <button
+            aria-label={`Онлајн игра — ${backendStatus === "ready" ? "повезано" : backendStatus === "connecting" ? "повезивање" : "офлајн"}`}
+            className={`nav-button nav-button--online nav-button--${backendStatus}`}
+            onClick={openOnlineLobby}
+            title="Онлајн игра"
+            type="button"
+          >
+            <span className="status-dot" aria-hidden="true" />
+            <span>Играј</span>
           </button>
-          <button className="nav-button" onClick={() => setOpenModal("rules")} type="button">
-            Правила
+          <button aria-label="Правила" className="nav-button nav-button--icon" onClick={() => setOpenModal("rules")} title="Правила" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 17.2v.1M9.8 9.2a2.3 2.3 0 1 1 3.6 1.9c-.9.6-1.4 1.1-1.4 2.2"/><circle cx="12" cy="12" r="9"/></svg>
+            <span className="desktop-label">Правила</span>
           </button>
-          <button className="nav-button" onClick={openLeaderboard} type="button">
-            Табела
-          </button>
-          <button className="icon-button" onClick={startNewGame} type="button">
-            <span className="desktop-label">Нова партија</span>
-            <span className="mobile-label">Нова</span>
+          <button aria-label="Табела" className="nav-button nav-button--icon" onClick={openLeaderboard} title="Табела" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v1.5A3.5 3.5 0 0 0 8.5 11M16 6h3v1.5a3.5 3.5 0 0 1-3.5 3.5M12 12v4M9 20h6M10 16h4v4"/></svg>
+            <span className="desktop-label">Табела</span>
           </button>
         </div>
       </header>
@@ -696,13 +792,13 @@ export function GamePrototype() {
           <div className="rack-section">
             <div className="rack-heading">
               <span><small>ТВОЈА СЛОВА</small><strong>Слова</strong></span>
-              <span className="bag-count">У врећици <b>{onlineState?.bag_count ?? game.bag.length}</b></span>
+              <span className="bag-count">У врећици <b>{bagCount}</b></span>
             </div>
             <div className="rack" aria-label="Сталак са словима">
               {game.rack.map((tile) => (
                 <button
-                  aria-pressed={selectedTileId === tile.id}
-                  className={`letter-tile rack-tile ${selectedTileId === tile.id ? "selected" : ""}`}
+                  aria-pressed={exchangeMode ? exchangeTileIds.includes(tile.id) : selectedTileId === tile.id}
+                  className={`letter-tile rack-tile ${exchangeMode && exchangeTileIds.includes(tile.id) ? "exchange-selected" : selectedTileId === tile.id ? "selected" : ""}`}
                   data-tile-id={tile.id}
                   disabled={matchComplete || (isOnline && !canPlayOnline)}
                   key={tile.id}
@@ -745,10 +841,20 @@ export function GamePrototype() {
           )}
 
           <div className="turn-utilities">
-            <button className="secondary-action" onClick={returnPendingTiles} type="button">
-              Поништи слова
-            </button>
-            {isOnline && onlineState?.match.status === "active" && (
+            {exchangeMode ? (
+              <button className="secondary-action" onClick={cancelExchange} type="button">
+                Одустани од замене
+              </button>
+            ) : pendingCount > 0 ? (
+              <button className="secondary-action" onClick={returnPendingTiles} type="button">
+                Поништи слова
+              </button>
+            ) : exchangeAvailable ? (
+              <button className="secondary-action exchange-action" onClick={beginExchange} type="button">
+                Замени слова
+              </button>
+            ) : null}
+            {!exchangeMode && isOnline && onlineState?.match.status === "active" && (
               <button
                 className="secondary-action"
                 disabled={!canPlayOnline || submitting || pendingCount > 0}
@@ -763,12 +869,16 @@ export function GamePrototype() {
           <div className="turn-actions">
             <button
               className="primary-action"
-              disabled={submitting || matchComplete || (isOnline && !canPlayOnline)}
-              onClick={submitMove}
+              disabled={submitting || matchComplete || (isOnline && !canPlayOnline) || (exchangeMode && exchangeTileIds.length === 0)}
+              onClick={exchangeMode ? exchangeSelectedTiles : submitMove}
               type="button"
             >
-              <span>{submitting ? "Провера речника…" : "Потврди потез"}</span>
-              <b>{evaluation.valid ? `+${evaluation.score}` : "→"}</b>
+              <span>
+                {submitting
+                  ? exchangeMode ? "МЕЊАМО СЛОВА…" : "ПРОВЕРА РЕЧНИКА…"
+                  : exchangeMode ? `ЗАМЕНИ ИЗАБРАНА СЛОВА (${exchangeTileIds.length})` : "ПОТВРДИ ПОТЕЗ"}
+              </span>
+              {!exchangeMode && evaluation.valid && <b>{`+${evaluation.score}`}</b>}
             </button>
           </div>
         </aside>
@@ -784,10 +894,27 @@ export function GamePrototype() {
       {onlineModalOpen && (
         <OnlineGameModal
           activeCode={onlineState?.match.status === "waiting" ? onlineState.match.invite_code : null}
+          displayName={onlineDisplayName}
           loading={onlineLoading}
           onClose={() => setOnlineModalOpen(false)}
           onCreate={createOnlineMatch}
+          onDisplayNameChange={setOnlineDisplayName}
           onJoin={joinOnlineMatch}
+        />
+      )}
+      {resultModalOpen && matchComplete && (
+        <GameResultModal
+          kind={resultKind}
+          onClose={() => setResultModalOpen(false)}
+          onNewGame={openNewOnlineGame}
+          onOpenLeaderboard={() => {
+            setResultModalOpen(false);
+            void openLeaderboard();
+          }}
+          opponentName={opponent?.display_name}
+          opponentScore={opponent?.score}
+          playerName={viewer?.display_name ?? "Играч"}
+          playerScore={game.score}
         />
       )}
     </main>
