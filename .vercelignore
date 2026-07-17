@@ -1,0 +1,13 @@
+/.agents/
+/.codex/
+/.git/
+/.next/
+/data/
+/docs/
+/node_modules/
+/output/
+/scripts/
+/supabase/
+/tmp/
+*.tsbuildinfo
+requirements-dictionary.txt
