@@ -538,7 +538,6 @@ button {
   border-radius: clamp(2px, 0.45vw, 6px);
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.43), inset 0 -2px 3px rgba(13, 66, 68, 0.11);
   cursor: pointer;
-  contain: layout paint;
 }
 
 .board-cell:not(.occupied):hover {
