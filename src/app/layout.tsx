@@ -3,14 +3,14 @@ import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistratio
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Речоград — српска игра речи",
+  title: "Шкрабај — српска игра речи",
   description:
     "Брза стратешка игра речи на српском језику, направљена за прегледач.",
-  applicationName: "Речоград",
+  applicationName: "Шкрабај",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Речоград",
+    title: "Шкрабај",
   },
   formatDetection: { telephone: false },
   icons: {

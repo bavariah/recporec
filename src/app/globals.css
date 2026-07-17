@@ -380,7 +380,7 @@ button {
 }
 
 .player-card small,
-.turn-indicator small,
+.round-indicator small,
 .score-preview small {
   color: #899188;
   font-size: 9px;
@@ -399,19 +399,46 @@ button {
   font-size: 29px;
 }
 
-.turn-indicator {
+.round-indicator {
   display: grid;
-  width: 86px;
-  place-content: center;
+  width: 150px;
+  gap: 8px;
+  place-content: center stretch;
+  padding: 0 18px;
   text-align: center;
   background: #e7e1d4;
   border-block: 1px solid var(--line);
 }
 
-.turn-indicator strong {
-  margin-top: 2px;
-  font-family: Georgia, serif;
-  font-size: 23px;
+.round-indicator small b {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.round-dots {
+  display: flex;
+  gap: 7px;
+  justify-content: center;
+}
+
+.round-dots i {
+  display: block;
+  width: 9px;
+  height: 9px;
+  background: #c4c0b6;
+  border: 1px solid #aaa69d;
+  border-radius: 50%;
+}
+
+.round-dots i.complete {
+  background: var(--forest-light);
+  border-color: var(--forest-light);
+}
+
+.round-dots i.active {
+  background: var(--orange);
+  border-color: var(--orange-dark);
+  box-shadow: 0 0 0 3px rgba(231, 104, 54, 0.18);
 }
 
 .play-area {
@@ -512,7 +539,7 @@ button {
 }
 
 .premium-label em {
-  font-size: clamp(6px, 0.85vw, 10px);
+  font-size: clamp(7px, 0.9vw, 11px);
   font-style: normal;
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -653,7 +680,7 @@ button {
 .turn-panel {
   position: sticky;
   top: 95px;
-  padding: 24px;
+  padding: 18px;
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 15px;
@@ -802,7 +829,14 @@ button {
 .turn-actions {
   display: grid;
   gap: 9px;
-  margin-top: 20px;
+  margin-top: 12px;
+}
+
+.turn-utilities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .primary-action,
@@ -840,8 +874,13 @@ button {
   box-shadow: 0 2px 0 #a83e18;
 }
 
-.primary-action span {
-  font-size: 20px;
+.primary-action > span {
+  font-size: 12px;
+}
+
+.primary-action > b {
+  font-family: Georgia, serif;
+  font-size: 19px;
 }
 
 .secondary-action {
@@ -1251,28 +1290,27 @@ button {
   .turn-panel {
     position: static;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 24px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 24px;
     max-width: 760px;
     margin: 0 auto;
   }
 
-  .panel-kicker,
-  .score-preview,
   .notice,
+  .blank-picker {
+    grid-column: 1 / -1;
+  }
+
   .turn-actions {
-    grid-column: 1;
-  }
-
-  .word-preview,
-  .blank-picker,
-  .phase-note {
     grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+    min-width: 230px;
   }
 
-  .word-preview {
-    grid-row: 1 / span 3;
-    margin-top: 0;
+  .turn-utilities {
+    grid-column: 1;
+    grid-row: 2;
   }
 }
 
@@ -1323,7 +1361,7 @@ button {
   }
 
   .match-strip {
-    grid-template-columns: minmax(0, 1fr) 50px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr);
     margin: 8px 6px;
     padding: 0;
   }
@@ -1391,24 +1429,35 @@ button {
     display: grid;
   }
 
-  .turn-indicator {
-    width: 50px;
+  .round-indicator {
+    width: 86px;
     min-height: 58px;
+    gap: 6px;
+    padding: 0 7px;
     border-right: 0;
     border-radius: 0;
   }
 
-  .turn-indicator small {
+  .round-indicator small {
     font-size: 7px;
   }
 
-  .turn-indicator strong {
-    font-size: 19px;
+  .round-indicator small b {
+    font-size: 9px;
+  }
+
+  .round-dots {
+    gap: 4px;
+  }
+
+  .round-dots i {
+    width: 7px;
+    height: 7px;
   }
 
   .play-area {
     gap: 10px;
-    padding: 0 2px 24px;
+    padding: 0 2px 96px;
   }
 
   .board-frame {
@@ -1427,6 +1476,7 @@ button {
   }
 
   .premium-label em {
+    font-size: 7px;
     letter-spacing: -0.01em;
   }
 
@@ -1460,8 +1510,11 @@ button {
   .turn-panel {
     display: block;
     margin: 0 4px;
-    padding: 12px;
-    border-radius: 10px;
+    padding: 0 8px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .panel-kicker,
@@ -1483,7 +1536,7 @@ button {
 
   .notice {
     min-height: 0;
-    padding: 10px;
+    padding: 9px 10px;
   }
 
   .notice p {
@@ -1491,8 +1544,48 @@ button {
   }
 
   .turn-actions {
+    position: fixed;
+    z-index: 30;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: block;
+    margin: 0;
+    padding: 8px max(10px, calc((100vw - 520px) / 2)) calc(8px + env(safe-area-inset-bottom));
+    background: rgba(23, 43, 34, 0.97);
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 -10px 28px rgba(23, 43, 34, 0.18);
+    backdrop-filter: blur(14px);
+  }
+
+  .turn-actions .primary-action {
+    width: 100%;
+    min-height: 54px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+
+  .turn-actions .primary-action > span {
+    font-size: 14px;
+  }
+
+  .turn-utilities {
+    display: flex;
     gap: 7px;
-    margin-top: 11px;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+
+  .turn-actions,
+  .turn-utilities {
+    min-width: 0;
+  }
+
+  .turn-utilities .secondary-action {
+    min-height: 38px;
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.6);
+    font-size: 10px;
   }
 
   .word-preview {

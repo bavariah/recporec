@@ -65,6 +65,10 @@ interface OnlineMatchState {
   viewer_id: string;
 }
 
+const MAX_ROUNDS = 5;
+const TURNS_PER_ROUND = 2;
+const MAX_TURNS = MAX_ROUNDS * TURNS_PER_ROUND;
+
 function seededRandom(seed: number) {
   let state = seed >>> 0;
   return () => {
@@ -236,6 +240,17 @@ export function GamePrototype() {
   const canPlayOnline = Boolean(
     isOnline && onlineState?.match.status === "active" && onlineState.match.current_player_id === userId,
   );
+  const matchComplete = isOnline
+    ? onlineState?.match.status === "completed"
+    : game.turn > MAX_TURNS;
+  const currentRound = Math.min(
+    MAX_ROUNDS,
+    Math.ceil(Math.min(game.turn, MAX_TURNS) / TURNS_PER_ROUND),
+  );
+  const playerIsActive = !matchComplete && (!isOnline || canPlayOnline);
+  const opponentIsActive = Boolean(
+    !matchComplete && isOnline && onlineState?.match.status === "active" && !canPlayOnline,
+  );
 
   function resetSelection() {
     setSelectedTileId(null);
@@ -334,6 +349,10 @@ export function GamePrototype() {
   }
 
   function selectRackTile(tile: RackTile) {
+    if (matchComplete) {
+      setNotice("Партија је завршена после пет рунди.");
+      return;
+    }
     if (isOnline && !canPlayOnline) {
       setNotice("Сачекај ривалов потез.");
       return;
@@ -348,6 +367,10 @@ export function GamePrototype() {
   }
 
   function handleBoardCell(row: number, col: number) {
+    if (matchComplete) {
+      setNotice("Партија је завршена после пет рунди.");
+      return;
+    }
     if (isOnline && !canPlayOnline) {
       setNotice("Сачекај ривалов потез.");
       return;
@@ -436,6 +459,10 @@ export function GamePrototype() {
 
   async function submitMove() {
     if (submitting) return;
+    if (matchComplete) {
+      setNotice("Партија је завршена после пет рунди.");
+      return;
+    }
     const result = evaluateMove(game.board);
     if (!result.valid) {
       setNotice(result.error ?? "Потез није исправан.");
@@ -506,10 +533,12 @@ export function GamePrototype() {
     }));
     resetSelection();
     setNotice(
-      `${result.words.map(({ word }) => word).join(" + ")} · +${result.score} поена. ` +
-        (supabase
-          ? "Потез и све направљене речи су прихваћени."
-          : "Потез је прихваћен без серверске провере речника."),
+      game.turn >= MAX_TURNS
+        ? `Пет рунди је завршено. Освојено: ${game.score + result.score} поена.`
+        : `${result.words.map(({ word }) => word).join(" + ")} · +${result.score} поена. ` +
+          (supabase
+            ? "Потез и све направљене речи су прихваћени."
+            : "Потез је прихваћен без серверске провере речника."),
     );
     setSubmitting(false);
   }
@@ -517,13 +546,13 @@ export function GamePrototype() {
   return (
     <main className="game-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Речоград, почетак">
+        <a className="brand" href="#top" aria-label="Шкрабај, почетак">
           <span className="brand-mark" aria-hidden="true">
-            Р
+            Ш
           </span>
           <span>
-            <strong>РЕЧОГРАД</strong>
-            <small>српска игра речи</small>
+            <strong>РЕЧИ · ШКРАБАЈ</strong>
+            <small>српска игра слагања речи</small>
           </span>
         </a>
 
@@ -587,18 +616,28 @@ export function GamePrototype() {
       )}
 
       <section className="match-strip" aria-label="Стање партије">
-        <div className="player-card active-player">
+        <div className={`player-card ${playerIsActive ? "active-player" : ""}`}>
           <span className="avatar">ТИ</span>
-          <span><small>{isOnline ? (canPlayOnline ? "НА ПОТЕЗУ" : "ИГРАЧ 1") : "НА ПОТЕЗУ"}</small><strong>{viewer?.display_name ?? "Играч"}</strong></span>
+          <span><small>{playerIsActive ? "НА ПОТЕЗУ" : "ИГРАЧ"}</small><strong>{viewer?.display_name ?? "Играч"}</strong></span>
           <b>{game.score}</b>
         </div>
-        <div className="turn-indicator">
-          <small>ПОТЕЗ</small>
-          <strong>{String(game.turn).padStart(2, "0")}</strong>
+        <div className="round-indicator" aria-label={`Рунда ${currentRound} од ${MAX_ROUNDS}`}>
+          <small>РУНДА <b>{currentRound}</b>/{MAX_ROUNDS}</small>
+          <div className="round-dots" aria-hidden="true">
+            {Array.from({ length: MAX_ROUNDS }, (_, index) => {
+              const round = index + 1;
+              const state = matchComplete || round < currentRound
+                ? "complete"
+                : round === currentRound
+                  ? "active"
+                  : "future";
+              return <i className={state} key={round} />;
+            })}
+          </div>
         </div>
-        <div className={`player-card ${opponent ? "" : "future-player"}`}>
+        <div className={`player-card ${opponentIsActive ? "active-player" : ""} ${opponent ? "" : "future-player"}`}>
           <span className="avatar">{opponent ? "РИ" : "?"}</span>
-          <span><small>{opponent ? (canPlayOnline ? "ЧЕКА" : "НА ПОТЕЗУ") : "СЛЕДЕЋА ФАЗА"}</small><strong>{opponent?.display_name ?? "Онлајн ривал"}</strong></span>
+          <span><small>{opponentIsActive ? "НА ПОТЕЗУ" : "ПРОТИВНИК"}</small><strong>{opponent?.display_name ?? "Противник"}</strong></span>
           <b>{opponent?.score ?? "—"}</b>
         </div>
       </section>
@@ -625,7 +664,7 @@ export function GamePrototype() {
                       className={`board-cell ${premium ?? ""} ${tile ? "occupied" : ""}`}
                       data-cell={`${row}-${col}`}
                       key={`${row}-${col}`}
-                      disabled={isOnline && !canPlayOnline}
+                      disabled={matchComplete || (isOnline && !canPlayOnline)}
                       onClick={() => handleBoardCell(row, col)}
                       role="gridcell"
                       type="button"
@@ -655,7 +694,7 @@ export function GamePrototype() {
 
           <div className="rack-section">
             <div className="rack-heading">
-              <span><small>ТВОЈА СЛОВА</small><strong>Изабери слово, па поље</strong></span>
+              <span><small>ТВОЈА СЛОВА</small><strong>Слова</strong></span>
               <span className="bag-count">У врећици <b>{onlineState?.bag_count ?? game.bag.length}</b></span>
             </div>
             <div className="rack" aria-label="Сталак са словима">
@@ -664,7 +703,7 @@ export function GamePrototype() {
                   aria-pressed={selectedTileId === tile.id}
                   className={`letter-tile rack-tile ${selectedTileId === tile.id ? "selected" : ""}`}
                   data-tile-id={tile.id}
-                  disabled={isOnline && !canPlayOnline}
+                  disabled={matchComplete || (isOnline && !canPlayOnline)}
                   key={tile.id}
                   onClick={() => selectRackTile(tile)}
                   type="button"
@@ -681,28 +720,9 @@ export function GamePrototype() {
         </div>
 
         <aside className="turn-panel">
-          <div className="panel-kicker">ТЕКУЋИ ПОТЕЗ</div>
-          <div className="score-preview">
-            <span><small>ПРЕДЛОГ</small><strong>{pendingCount} {pendingCount === 1 ? "слово" : "слова"}</strong></span>
-            <b>{evaluation.valid ? `+${evaluation.score}` : "—"}</b>
-          </div>
-
           <div className={`notice ${evaluation.valid ? "notice-valid" : ""}`} aria-live="polite">
             <span aria-hidden="true">{evaluation.valid ? "✓" : "i"}</span>
             <p>{notice}</p>
-          </div>
-
-          <div className={`word-preview ${evaluation.words.length ? "" : "word-preview--empty"}`}>
-            <small>НАПРАВЉЕНЕ РЕЧИ</small>
-            {evaluation.words.length ? (
-              evaluation.words.map((word) => (
-                <div key={word.positions.map(({ row, col }) => `${row}-${col}`).join("|")}>
-                  <strong>{word.word}</strong><span>+{word.score}</span>
-                </div>
-              ))
-            ) : (
-              <p>Појавиће се када слова направе исправан низ.</p>
-            )}
           </div>
 
           {selectedTile?.letter === null && (
@@ -723,17 +743,9 @@ export function GamePrototype() {
             </div>
           )}
 
-          <div className="turn-actions">
-            <button
-              className="primary-action"
-              disabled={submitting || (isOnline && !canPlayOnline)}
-              onClick={submitMove}
-              type="button"
-            >
-              {submitting ? "Провера речника…" : "Потврди потез"} <span>→</span>
-            </button>
+          <div className="turn-utilities">
             <button className="secondary-action" onClick={returnPendingTiles} type="button">
-              Врати постављена слова
+              Поништи слова
             </button>
             {isOnline && onlineState?.match.status === "active" && (
               <button
@@ -742,18 +754,21 @@ export function GamePrototype() {
                 onClick={passOnlineTurn}
                 type="button"
               >
-                Прескочи потез
+                Прескочи
               </button>
             )}
           </div>
 
-          <div className="phase-note">
-            <span>01</span>
-            <p><strong>Сада:</strong> Auth, серверски речник, приватна слова и синхронизован потез.</p>
-          </div>
-          <div className="phase-note muted">
-            <span>02</span>
-            <p><strong>Правило:</strong> четири узастопна прескакања завршавају партију.</p>
+          <div className="turn-actions">
+            <button
+              className="primary-action"
+              disabled={submitting || matchComplete || (isOnline && !canPlayOnline)}
+              onClick={submitMove}
+              type="button"
+            >
+              <span>{submitting ? "Провера речника…" : "Потврди потез"}</span>
+              <b>{evaluation.valid ? `+${evaluation.score}` : "→"}</b>
+            </button>
           </div>
         </aside>
       </section>

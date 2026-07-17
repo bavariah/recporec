@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Речоград — српска игра речи",
-    short_name: "Речоград",
+    name: "Шкрабај — српска игра речи",
+    short_name: "Шкрабај",
     description: "Стратешка игра речи на српском језику.",
     start_url: "/",
     display: "standalone",

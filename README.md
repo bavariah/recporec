@@ -1,4 +1,4 @@
-# Речоград
+# Шкрабај
 
 Standalone PWA-ready foundation for a Serbian browser word game inspired by
 tile-placement and board-domination games. The current build is a polished local
