@@ -6,11 +6,12 @@ interface AppModalProps {
   children: ReactNode;
   eyebrow: string;
   onClose: () => void;
+  position?: "center" | "upper";
   title: string;
   wide?: boolean;
 }
 
-export function AppModal({ children, eyebrow, onClose, title, wide = false }: AppModalProps) {
+export function AppModal({ children, eyebrow, onClose, position = "center", title, wide = false }: AppModalProps) {
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -29,7 +30,7 @@ export function AppModal({ children, eyebrow, onClose, title, wide = false }: Ap
   return (
     <div
       aria-label="Затвори прозор"
-      className="modal-overlay"
+      className={`modal-overlay ${position === "upper" ? "modal-overlay--upper" : ""}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

@@ -51,7 +51,7 @@ export function OnlineGameModal({
   }
 
   return (
-    <AppModal eyebrow="ИГРА УДВОЈЕ" onClose={onClose} title="Онлајн партија">
+    <AppModal eyebrow="ИГРА УДВОЈЕ" onClose={onClose} position="upper" title="Онлајн партија">
       {activeCode ? (
         <div className="invite-ready">
           <span>ПОЗИВНИ КОД</span>
@@ -72,7 +72,6 @@ export function OnlineGameModal({
           <label>
             <span>КАКО ДА ТЕ ВИДИ РИВАЛ?</span>
             <input
-              autoFocus
               autoComplete="nickname"
               maxLength={24}
               minLength={2}
