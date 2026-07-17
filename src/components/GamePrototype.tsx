@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   BOARD_SIZE,
   getPremium,
@@ -69,6 +70,12 @@ interface OnlineMatchState {
   viewer_id: string;
 }
 
+interface MoveFeedback {
+  kind: "accepted" | "rejected";
+  sequence: number;
+  tileIds: string[];
+}
+
 const MAX_ROUNDS = 5;
 const TURNS_PER_ROUND = 2;
 const MAX_TURNS = MAX_ROUNDS * TURNS_PER_ROUND;
@@ -119,6 +126,8 @@ export function GamePrototype() {
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [onlineState, setOnlineState] = useState<OnlineMatchState | null>(null);
   const [resultModalOpen, setResultModalOpen] = useState(false);
+  const [moveFeedback, setMoveFeedback] = useState<MoveFeedback | null>(null);
+  const moveFeedbackSequence = useRef(0);
 
   const applyOnlineMatchState = useCallback((nextState: OnlineMatchState) => {
     setOnlineState(nextState);
@@ -276,6 +285,12 @@ export function GamePrototype() {
         : "lose"
     : "summary";
 
+  function triggerMoveFeedback(kind: MoveFeedback["kind"], tileIds: string[]) {
+    if (tileIds.length === 0) return;
+    moveFeedbackSequence.current += 1;
+    setMoveFeedback({ kind, tileIds, sequence: moveFeedbackSequence.current });
+  }
+
   function resetSelection() {
     setSelectedTileId(null);
     setBlankLetter(null);
@@ -302,6 +317,7 @@ export function GamePrototype() {
     setActiveMatchId(null);
     setOnlineState(null);
     setResultModalOpen(false);
+    setMoveFeedback(null);
     setGame(buildNewGame());
     resetSelection();
     setNotice("Нова партија је спремна. Прва реч иде преко звезде.");
@@ -447,6 +463,7 @@ export function GamePrototype() {
   }
 
   function selectRackTile(tile: RackTile) {
+    setMoveFeedback(null);
     if (matchComplete) {
       setNotice("Партија је завршена после пет рунди.");
       return;
@@ -474,6 +491,7 @@ export function GamePrototype() {
   }
 
   function handleBoardCell(row: number, col: number) {
+    setMoveFeedback(null);
     if (matchComplete) {
       setNotice("Партија је завршена после пет рунди.");
       return;
@@ -561,6 +579,7 @@ export function GamePrototype() {
       board: nextBoard,
       rack: [...current.rack, ...returned],
     }));
+    setMoveFeedback(null);
     resetSelection();
     setNotice("Сва слова из текућег потеза су враћена.");
   }
@@ -571,8 +590,12 @@ export function GamePrototype() {
       setNotice("Партија је завршена после пет рунди.");
       return;
     }
+    const pendingTileIds = getPendingPositions(game.board)
+      .map(({ row, col }) => game.board[row][col]?.id)
+      .filter((tileId): tileId is string => Boolean(tileId));
     const result = evaluateMove(game.board);
     if (!result.valid) {
+      triggerMoveFeedback("rejected", pendingTileIds);
       setNotice(result.error ?? "Потез није исправан.");
       return;
     }
@@ -596,10 +619,12 @@ export function GamePrototype() {
       });
       if (error) {
         setSubmitting(false);
+        triggerMoveFeedback("rejected", pendingTileIds);
         setNotice(`Потез није прихваћен: ${error.message}`);
         return;
       }
       applyOnlineMatchState(data as OnlineMatchState);
+      triggerMoveFeedback("accepted", pendingTileIds);
       setSubmitting(false);
       return;
     }
@@ -612,6 +637,7 @@ export function GamePrototype() {
 
       if (error) {
         setSubmitting(false);
+        triggerMoveFeedback("rejected", pendingTileIds);
         setNotice(`Провера речника није успела: ${error.message}`);
         return;
       }
@@ -625,6 +651,7 @@ export function GamePrototype() {
       const rejected = words.filter((word) => !accepted.has(word));
       if (rejected.length) {
         setSubmitting(false);
+        triggerMoveFeedback("rejected", pendingTileIds);
         setNotice(`Речник не прихвата: ${rejected.join(", ")}.`);
         return;
       }
@@ -639,6 +666,7 @@ export function GamePrototype() {
       score: current.score + result.score,
       turn: current.turn + 1,
     }));
+    triggerMoveFeedback("accepted", pendingTileIds);
     resetSelection();
     setNotice(
       game.turn >= MAX_TURNS
@@ -748,6 +776,11 @@ export function GamePrototype() {
                   const tile = game.board[row][col];
                   const premium = getPremium(row, col);
                   const isStart = row === START_CELL.row && col === START_CELL.col;
+                  const feedbackIndex = tile ? (moveFeedback?.tileIds.indexOf(tile.id) ?? -1) : -1;
+                  const feedbackClass = feedbackIndex >= 0 ? moveFeedback?.kind ?? "" : "";
+                  const feedbackStyle = feedbackIndex >= 0
+                    ? { "--feedback-order": feedbackIndex } as CSSProperties
+                    : undefined;
 
                   return (
                     <button
@@ -768,7 +801,9 @@ export function GamePrototype() {
                     >
                       {tile ? (
                         <span
-                          className={`letter-tile board-tile ${tile.committed ? "committed" : "pending"} ${tile.isBlank ? "blank" : ""}`}
+                          className={`letter-tile board-tile ${tile.committed ? "committed" : "pending"} ${tile.isBlank ? "blank" : ""} ${feedbackClass}`}
+                          key={`${tile.id}-${feedbackIndex >= 0 ? moveFeedback?.sequence : "idle"}`}
+                          style={feedbackStyle}
                         >
                           <strong>{tile.letter}</strong>
                           <small>{tile.value}</small>
@@ -817,8 +852,8 @@ export function GamePrototype() {
         </div>
 
         <aside className="turn-panel">
-          <div className={`notice ${evaluation.valid ? "notice-valid" : ""}`} aria-live="polite">
-            <span aria-hidden="true">{evaluation.valid ? "✓" : "i"}</span>
+          <div className={`notice ${moveFeedback?.kind === "rejected" ? "notice-rejected" : moveFeedback?.kind === "accepted" || evaluation.valid ? "notice-valid" : ""}`} aria-live="polite">
+            <span aria-hidden="true">{moveFeedback?.kind === "rejected" ? "×" : moveFeedback?.kind === "accepted" || evaluation.valid ? "✓" : "i"}</span>
             <p>{notice}</p>
           </div>
 
