@@ -548,11 +548,12 @@ export function GamePrototype() {
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Шкрабај, почетак">
           <span className="brand-mark" aria-hidden="true">
-            Ш
+            <b>Ш</b>
+            <small>КРАБАЈ</small>
           </span>
-          <span>
-            <strong>РЕЧИ · ШКРАБАЈ</strong>
-            <small>српска игра слагања речи</small>
+          <span className="brand-copy">
+            <strong>ШКРАБАЈ</strong>
+            <small>српска игра речи</small>
           </span>
         </a>
 

@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="108" fill="#172b22"/>
-  <rect x="82" y="82" width="348" height="348" rx="54" fill="#f1dfb8" stroke="#cbb47f" stroke-width="18"/>
-  <path d="M389 91v290c0 32-26 58-58 58H99" fill="none" stroke="#ad945c" stroke-width="14" opacity=".55"/>
-  <text x="256" y="337" text-anchor="middle" font-family="Georgia,serif" font-size="264" font-weight="700" fill="#172b22">Ш</text>
-  <circle cx="382" cy="374" r="38" fill="#e76836"/>
+  <rect width="512" height="512" rx="108" fill="#0d3032"/>
+  <rect x="74" y="68" width="364" height="376" rx="62" fill="#fff0c8" stroke="#c99d51" stroke-width="18"/>
+  <path d="M401 79v292c0 38-31 69-69 69H91" fill="none" stroke="#b88336" stroke-width="15" opacity=".42"/>
+  <text x="256" y="310" text-anchor="middle" font-family="Trebuchet MS,Arial,sans-serif" font-size="246" font-weight="900" fill="#12383a">Ш</text>
+  <text x="256" y="380" text-anchor="middle" font-family="Arial,sans-serif" font-size="43" font-weight="900" letter-spacing="7" fill="#12383a">КРАБАЈ</text>
+  <circle cx="392" cy="385" r="36" fill="#f26436"/>
   <text x="382" y="388" text-anchor="middle" font-family="Arial,sans-serif" font-size="39" font-weight="800" fill="white">1</text>
 </svg>
