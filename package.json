@@ -1,0 +1,42 @@
+{
+  "name": "recograd",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:dictionary": "node --test scripts/dictionary-lib.test.mjs",
+    "dictionary:extract-pdf": "python scripts/extract_dictionary_headwords.py",
+    "dictionary:import-cik": "node scripts/import-cik-pogodi.mjs",
+    "dictionary:build": "node scripts/build-dictionary.mjs",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:seed": "node scripts/build-supabase-seed.mjs",
+    "supabase:setup": "npm run dictionary:build && npm run supabase:seed && supabase start",
+    "supabase:reset": "npm run dictionary:build && npm run supabase:seed && supabase db reset",
+    "supabase:verify": "node --env-file=.env.local scripts/verify-local-supabase.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
+    "next": "16.2.10",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "eslint": "^9.25.1",
+    "eslint-config-next": "16.2.10",
+    "supabase": "^2.109.1",
+    "typescript": "^5.9.3",
+    "ws": "^8.21.1"
+  },
+  "overrides": {
+    "postcss": "8.5.19"
+  }
+}

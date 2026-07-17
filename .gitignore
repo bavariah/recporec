@@ -1,0 +1,36 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# local files
+.DS_Store
+*.pem
+.env*
+!.env.example
+/.agents/
+/.codex/
+/tmp/
+/.vercel/
+
+# source dictionary may not be redistributable
+/data/dictionary/source/*.pdf
+
+# generated local database seed
+/supabase/seeds/*.sql
+!/supabase/seeds/.gitkeep
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

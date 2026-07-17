@@ -1,0 +1,60 @@
+{
+  "source": "Мирослав Николић (ed.) - Речник српскога језика (Rečnik srpskoga jezika)-Матица српска (2011).pdf",
+  "pages": {
+    "totalInPdf": 1530,
+    "start": 17,
+    "end": 1530,
+    "withoutDetectedEntryFont": 1,
+    "withoutDetectedEntryFontPages": [
+      1530
+    ]
+  },
+  "uniqueHeadwords": 36399,
+  "initialCorrections": 919,
+  "byLength": {
+    "2": 230,
+    "3": 891,
+    "4": 2110,
+    "5": 4647,
+    "6": 6975,
+    "7": 9763,
+    "8": 11783
+  },
+  "samplePages": [
+    {
+      "page": 17,
+      "entryFont": "/Fd3206848-Identity-H@9.0",
+      "expectedInitial": null,
+      "headwords": 10
+    },
+    {
+      "page": 18,
+      "entryFont": "/Fd3206848-Identity-H@9.0",
+      "expectedInitial": "а",
+      "headwords": 36
+    },
+    {
+      "page": 19,
+      "entryFont": "/Fd3206848-Identity-H@9.0",
+      "expectedInitial": "а",
+      "headwords": 34
+    },
+    {
+      "page": 1528,
+      "entryFont": "/Fd2999560-Identity-H@10.05",
+      "expectedInitial": null,
+      "headwords": 50
+    },
+    {
+      "page": 1529,
+      "entryFont": "/Fd2999560-Identity-H@10.05",
+      "expectedInitial": "ш",
+      "headwords": 45
+    },
+    {
+      "page": 1530,
+      "entryFont": null,
+      "headwords": 0
+    }
+  ]
+}
