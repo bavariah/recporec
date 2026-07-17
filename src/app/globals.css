@@ -167,6 +167,10 @@ button {
   border-color: #ffffff66;
 }
 
+.mobile-label {
+  display: none;
+}
+
 .intro {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1274,8 +1278,8 @@ button {
 
 @media (max-width: 680px) {
   .topbar {
-    min-height: 66px;
-    padding: 10px 15px;
+    min-height: 58px;
+    padding: 7px 8px;
   }
 
   .topbar-actions {
@@ -1283,8 +1287,8 @@ button {
   }
 
   .brand-mark {
-    width: 39px;
-    height: 39px;
+    width: 40px;
+    height: 40px;
   }
 
   .brand strong {
@@ -1303,81 +1307,108 @@ button {
   .icon-button,
   .nav-button {
     min-height: 44px;
-    padding: 0 9px;
-    font-size: 10px;
+    padding: 0 8px;
+    font-size: 9px;
   }
 
   .icon-button {
-    max-width: 52px;
-    overflow: hidden;
-    white-space: nowrap;
+    min-width: 48px;
   }
+
+  .desktop-label { display: none; }
+  .mobile-label { display: inline; }
 
   .intro {
-    gap: 16px;
-    padding: 25px 16px 18px;
-  }
-
-  .intro h1 {
-    font-size: clamp(38px, 11vw, 46px);
-    line-height: 0.94;
-  }
-
-  .intro-copy {
-    margin-top: 14px;
-    font-size: 13px;
-    line-height: 1.55;
-  }
-
-  .legend {
-    min-width: 0;
-    gap: 8px 14px;
-    padding: 11px 13px;
+    display: none;
   }
 
   .match-strip {
-    grid-template-columns: 1fr 57px;
-    margin-bottom: 14px;
-    padding: 0 16px;
+    grid-template-columns: minmax(0, 1fr) 50px minmax(0, 1fr);
+    margin: 8px 6px;
+    padding: 0;
   }
 
   .match-banner {
     grid-template-columns: 1fr auto;
-    gap: 5px 10px;
-    margin: 0 8px 10px;
+    gap: 2px 8px;
+    margin: 8px 6px 0;
+    padding: 4px 8px;
+    border-radius: 8px;
   }
 
   .match-banner p {
-    grid-column: 1;
+    display: none;
   }
 
   .match-banner button {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1;
   }
 
   .player-card {
-    min-height: 66px;
-    padding: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px;
+    min-width: 0;
+    min-height: 58px;
+    padding: 7px 8px;
   }
 
   .player-card:first-child {
-    border-radius: 10px 0 0 10px;
+    border-radius: 8px 0 0 8px;
   }
 
-  .future-player {
+  .player-card:last-child {
+    border-radius: 0 8px 8px 0;
+  }
+
+  .player-card .avatar {
     display: none;
   }
 
+  .player-card > span:nth-child(2) {
+    min-width: 0;
+  }
+
+  .player-card small {
+    overflow: hidden;
+    font-size: 7px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .player-card strong {
+    overflow: hidden;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .player-card > b {
+    font-size: 22px;
+  }
+
+  .future-player {
+    display: grid;
+  }
+
   .turn-indicator {
-    width: 57px;
-    border-right: 1px solid var(--line);
-    border-radius: 0 10px 10px 0;
+    width: 50px;
+    min-height: 58px;
+    border-right: 0;
+    border-radius: 0;
+  }
+
+  .turn-indicator small {
+    font-size: 7px;
+  }
+
+  .turn-indicator strong {
+    font-size: 19px;
   }
 
   .play-area {
-    gap: 18px;
-    padding: 0 2px 45px;
+    gap: 10px;
+    padding: 0 2px 24px;
   }
 
   .board-frame {
@@ -1400,26 +1431,78 @@ button {
   }
 
   .rack-section {
+    margin-top: 11px;
     padding: 0 4px;
+  }
+
+  .rack-heading {
+    margin: 0 3px 7px;
+  }
+
+  .rack-heading small {
+    display: none;
   }
 
   .rack {
     gap: 5px;
-    padding: 10px 9px 14px;
+    padding: 7px 8px 10px;
+    border-bottom-width: 5px;
   }
 
   .rack-heading strong {
-    font-size: 15px;
+    font-size: 13px;
+  }
+
+  .bag-count {
+    font-size: 9px;
   }
 
   .turn-panel {
     display: block;
-    margin: 0 8px;
-    padding: 19px;
+    margin: 0 4px;
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .panel-kicker,
+  .phase-note {
+    display: none;
+  }
+
+  .score-preview {
+    padding: 0 0 8px;
+  }
+
+  .score-preview strong {
+    font-size: 15px;
+  }
+
+  .score-preview > b {
+    font-size: 29px;
+  }
+
+  .notice {
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .notice p {
+    font-size: 11px;
+  }
+
+  .turn-actions {
+    gap: 7px;
+    margin-top: 11px;
   }
 
   .word-preview {
-    margin-top: 18px;
+    min-height: 0;
+    margin-top: 10px;
+    padding-bottom: 8px;
+  }
+
+  .word-preview--empty {
+    display: none;
   }
 
   .modal-overlay {

@@ -546,7 +546,8 @@ export function GamePrototype() {
             Табела
           </button>
           <button className="icon-button" onClick={startNewGame} type="button">
-            Нова партија
+            <span className="desktop-label">Нова партија</span>
+            <span className="mobile-label">Нова</span>
           </button>
         </div>
       </header>
@@ -691,7 +692,7 @@ export function GamePrototype() {
             <p>{notice}</p>
           </div>
 
-          <div className="word-preview">
+          <div className={`word-preview ${evaluation.words.length ? "" : "word-preview--empty"}`}>
             <small>НАПРАВЉЕНЕ РЕЧИ</small>
             {evaluation.words.length ? (
               evaluation.words.map((word) => (
