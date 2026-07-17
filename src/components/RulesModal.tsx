@@ -33,7 +33,7 @@ export function RulesModal({ onClose }: RulesModalProps) {
         Једном у партији можеш заменити изабрана слова и затим наставити исти потез. Исти резултат је нерешен, а четири прескакања заредом завршавају партију.
       </p>
       <a className="sibling-game-link" href="https://bavariah.github.io/cik-pogodi/" rel="noreferrer" target="_blank">
-        Играј и Цик Погоди <span aria-hidden="true">↗</span>
+        Играј и ЧИК ПОГОДИ <span aria-hidden="true">↗</span>
       </a>
     </AppModal>
   );
