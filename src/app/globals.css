@@ -293,6 +293,20 @@ button {
   line-height: 1.7;
 }
 
+.intro--playing {
+  grid-template-columns: 1fr auto;
+  padding-block: 20px 18px;
+}
+
+.intro--playing h1 {
+  font-size: clamp(28px, 3.6vw, 43px);
+}
+
+.intro--playing .intro-copy,
+.intro--playing .eyebrow {
+  display: none;
+}
+
 .legend {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -410,6 +424,15 @@ button {
   cursor: pointer;
   font-size: 11px;
   font-weight: 800;
+}
+
+.match-banner__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.match-banner__actions button {
+  min-width: 64px;
 }
 
 .match-banner--waiting {
@@ -607,6 +630,17 @@ button {
   box-shadow: none;
 }
 
+.board-cell.last-move::after {
+  position: absolute;
+  z-index: 3;
+  inset: 3px;
+  border: 2px solid rgba(39, 157, 126, 0.86);
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px rgba(229, 248, 241, 0.62);
+  content: "";
+  pointer-events: none;
+}
+
 .premium-label {
   display: flex;
   flex-direction: column;
@@ -761,6 +795,29 @@ button {
 .rack-heading small,
 .rack-heading strong {
   display: block;
+}
+
+.rack-heading__tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rack-heading__tools > button {
+  min-height: 30px;
+  padding: 0 9px;
+  color: #51645b;
+  background: #fffdf8;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.rack-heading__tools > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .rack-heading small {
@@ -928,6 +985,30 @@ button {
   line-height: 1.5;
 }
 
+.report-word {
+  margin-top: 7px;
+  padding: 5px 0;
+  color: var(--orange-dark);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.daily-best {
+  margin: 8px 0 0;
+  color: #68736c;
+  font-size: 10px;
+}
+
+.daily-best b {
+  color: var(--orange-dark);
+}
+
 .word-preview {
   min-height: 101px;
   margin-top: 20px;
@@ -964,6 +1045,110 @@ button {
   color: #8a918c;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.move-history {
+  display: grid;
+  max-height: 210px;
+  gap: 5px;
+  margin: 12px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.move-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  padding: 9px 10px;
+  background: #eee9dd;
+  border-radius: 8px;
+}
+
+.move-history span {
+  grid-column: 1 / -1;
+  color: #7c867f;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.move-history strong {
+  overflow: hidden;
+  font-family: Georgia, serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-history b {
+  color: var(--orange-dark);
+}
+
+.tutorial-card {
+  position: fixed;
+  z-index: 80;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(430px, calc(100vw - 36px));
+  padding: 18px 48px 18px 18px;
+  color: #fff;
+  background: linear-gradient(145deg, #173d7a, #102e68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  box-shadow: 0 22px 55px rgba(8, 29, 67, 0.32);
+  animation: modal-panel-in 220ms ease-out both;
+}
+
+.tutorial-card > button:first-child {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  color: #fff;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 23px;
+}
+
+.tutorial-card small,
+.tutorial-card strong {
+  display: block;
+}
+
+.tutorial-card small {
+  margin-bottom: 6px;
+  color: #74d9bd;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+}
+
+.tutorial-card strong {
+  font-family: Georgia, serif;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.tutorial-card p {
+  margin: 8px 0 12px;
+  color: #d7e3ee;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.tutorial-card .tutorial-done {
+  min-height: 38px;
+  padding: 0 14px;
+  color: #102e68;
+  background: #74d9bd;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 900;
 }
 
 .blank-picker {
@@ -1648,6 +1833,10 @@ button {
     gap: 2px;
   }
 
+  .brand-logo {
+    width: 72px;
+  }
+
   .brand-mark {
     width: 52px;
     height: 42px;
@@ -1722,6 +1911,10 @@ button {
   }
 
   .match-banner button {
+    min-width: 56px;
+  }
+
+  .match-banner__actions {
     grid-column: 2;
     grid-row: 1;
   }
@@ -1853,6 +2046,12 @@ button {
     font-size: 13px;
   }
 
+  .rack-heading__tools > button {
+    min-height: 28px;
+    padding-inline: 7px;
+    font-size: 8px;
+  }
+
   .bag-count {
     font-size: 9px;
   }
@@ -1906,6 +2105,12 @@ button {
     border-top: 0;
     box-shadow: 0 -10px 28px rgba(16, 46, 104, 0.13);
     backdrop-filter: blur(14px);
+  }
+
+  .tutorial-card {
+    right: 8px;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    width: calc(100vw - 16px);
   }
 
   .turn-actions .primary-action {

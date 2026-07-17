@@ -12,6 +12,10 @@ authoritative online turn engine remain the next deployment phase.
 - eight-tile rack with automatic refill, placement, undo, and one non-turn-ending exchange per player per game;
 - first-move, straight-line, gap, connection, and minimum-word validation;
 - cross-word scoring with premiums applied only to newly placed tiles;
+- fair single-star opening scoring with automated regression coverage;
+- offline practice backed by the generated 41,163-word browser dictionary;
+- a dictionary-driven solo opponent and deterministic daily challenge;
+- live score breakdowns, last-move highlighting, move history, and rack tools;
 - fixed board and cell geometry, verified not to reflow when tiles are placed;
 - touch-first mobile layout with 44px+ board, rack, navigation, and close targets;
 - separate Rules and Leaderboard popups with keyboard and backdrop close;
@@ -19,6 +23,7 @@ authoritative online turn engine remain the next deployment phase.
 - repeatable PDF, `cik-pogodi`, and manual-addition dictionary pipeline;
 - local anonymous Auth and server-side dictionary checks for submitted words;
 - visible create/join-by-code flow for two browser players;
+- shareable invites, match resume, turn notifications, resigning, and rematches;
 - server-owned shuffled bag, private racks, turn/version checks, scoring, passes,
   winner recording, Realtime synchronization, and leaderboard schema.
 
@@ -39,6 +44,7 @@ Verification:
 
 ```powershell
 npm run test:dictionary
+npm test
 npm run typecheck
 npm run lint
 npm run build
@@ -135,6 +141,8 @@ This creates:
 - `output/dictionary/dictionary-stats.json` for counts by tile length;
 - `output/dictionary/pdf-extraction-report.json` for extraction coverage and
   OCR-correction counts.
+- `public/dictionary.txt` for cached offline validation, daily play, and the
+  solo opponent.
 
 See [docs/architecture.md](docs/architecture.md) for backend boundaries and the
 online multiplayer roadmap.

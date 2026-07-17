@@ -14,6 +14,7 @@ const paths = {
   cik: path.join(root, "data", "dictionary", "imports", "cik-pogodi.txt"),
   additional: path.join(root, "data", "dictionary", "manual", "additional-accepted.txt"),
   output: path.join(root, "output", "dictionary"),
+  publicDictionary: path.join(root, "public", "dictionary.txt"),
 };
 
 async function readOptional(filePath) {
@@ -81,6 +82,11 @@ await fs.writeFile(
 await fs.writeFile(
   path.join(paths.output, "two-letter-review.csv"),
   csvHeader + reviewRows.join("\n") + (reviewRows.length ? "\n" : ""),
+  "utf8",
+);
+await fs.writeFile(
+  paths.publicDictionary,
+  sortSerbianWords(accepted.keys()).join("\n") + (accepted.size ? "\n" : ""),
   "utf8",
 );
 

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, DragEvent } from "react";
 import {
   BOARD_SIZE,
   getPremium,
@@ -19,12 +19,14 @@ import {
   getPendingPositions,
 } from "@/game/engine";
 import { createTileBag, drawTiles, shuffleTiles } from "@/game/tiles";
+import { findBotMove } from "@/game/bot";
 import type { Board, RackTile, SerbianLetter } from "@/game/types";
 import { supabase } from "@/lib/supabase/client";
 import { LeaderboardModal, type LeaderboardEntry } from "@/components/LeaderboardModal";
 import { GameResultModal, type GameResultKind } from "@/components/GameResultModal";
 import { OnlineGameModal } from "@/components/OnlineGameModal";
 import { RulesModal } from "@/components/RulesModal";
+import { checkLocalWords, loadLocalDictionary } from "@/lib/localDictionary";
 
 type BackendStatus = "connecting" | "ready" | "offline";
 
@@ -68,6 +70,22 @@ interface OnlineMatchState {
   players: OnlinePlayer[];
   bag_count: number;
   viewer_id: string;
+  moves?: Array<{
+    id: number;
+    placements: Array<{ tileId?: string; tile_id?: string }>;
+    player_id: string;
+    player_name: string;
+    score: number;
+    turn: number;
+    words: string[];
+  }>;
+}
+
+interface OpenMatch {
+  invite_code: string;
+  match_id: string;
+  status: string;
+  updated_at: string;
 }
 
 interface MoveFeedback {
@@ -76,9 +94,22 @@ interface MoveFeedback {
   tileIds: string[];
 }
 
+interface GameMove {
+  id: string;
+  playerName: string;
+  score: number;
+  tileIds: string[];
+  turn: number;
+  words: Array<{ score: number; word: string }>;
+}
+
 const MAX_ROUNDS = 5;
 const TURNS_PER_ROUND = 2;
 const MAX_TURNS = MAX_ROUNDS * TURNS_PER_ROUND;
+
+function dailySeed() {
+  return Number(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Belgrade" }).replaceAll("-", ""));
+}
 
 function seededRandom(seed: number) {
   let state = seed >>> 0;
@@ -99,6 +130,23 @@ function buildNewGame(random: () => number = Math.random): GameState {
     rack: firstDraw.drawn,
     score: 0,
     turn: 1,
+  };
+}
+
+function buildBotGame(random: () => number = Math.random) {
+  const shuffledBag = shuffleTiles(createTileBag(), random);
+  const playerDraw = drawTiles(shuffledBag, RACK_SIZE);
+  const botDraw = drawTiles(playerDraw.bag, RACK_SIZE);
+  return {
+    botRack: botDraw.drawn,
+    game: {
+      board: createEmptyBoard(),
+      bag: botDraw.bag,
+      exchangeUsed: false,
+      rack: playerDraw.drawn,
+      score: 0,
+      turn: 1,
+    } satisfies GameState,
   };
 }
 
@@ -124,10 +172,45 @@ export function GamePrototype() {
   const [onlineDisplayName, setOnlineDisplayName] = useState("");
   const [onlineLoading, setOnlineLoading] = useState(false);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+  const [initialInviteCode, setInitialInviteCode] = useState("");
   const [onlineState, setOnlineState] = useState<OnlineMatchState | null>(null);
   const [resultModalOpen, setResultModalOpen] = useState(false);
   const [moveFeedback, setMoveFeedback] = useState<MoveFeedback | null>(null);
+  const [moveHistory, setMoveHistory] = useState<GameMove[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [localMode, setLocalMode] = useState<"practice" | "daily" | "bot">("practice");
+  const [dailyBest, setDailyBest] = useState(0);
+  const [lastRejectedWords, setLastRejectedWords] = useState<string[]>([]);
+  const [botRack, setBotRack] = useState<RackTile[]>([]);
+  const [botScore, setBotScore] = useState(0);
+  const [botThinking, setBotThinking] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const moveFeedbackSequence = useRef(0);
+
+  useEffect(() => {
+    void loadLocalDictionary().catch(() => undefined);
+    const timer = window.setTimeout(() => {
+      setSoundEnabled(window.localStorage.getItem("skrabaj-sound") !== "off");
+      setTutorialOpen(window.localStorage.getItem("skrabaj-tutorial-seen") !== "yes");
+      setDailyBest(Number(window.localStorage.getItem(`skrabaj-daily-${dailySeed()}`) ?? 0));
+      setNotificationsEnabled(typeof Notification !== "undefined" && window.localStorage.getItem("skrabaj-notifications") === "on" && Notification.permission === "granted");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (
+      notificationsEnabled &&
+      typeof Notification !== "undefined" &&
+      onlineState?.match.status === "active" &&
+      onlineState.match.current_player_id === userId &&
+      document.visibilityState === "hidden"
+    ) {
+      new Notification("Твој потез у Шкрабају", { body: `Партија ${onlineState.match.invite_code} те чека.` });
+    }
+  }, [notificationsEnabled, onlineState?.match.current_player_id, onlineState?.match.invite_code, onlineState?.match.status, userId]);
 
   const applyOnlineMatchState = useCallback((nextState: OnlineMatchState) => {
     setOnlineState(nextState);
@@ -146,11 +229,20 @@ export function GamePrototype() {
     setBlankLetter(null);
     setExchangeMode(false);
     setExchangeTileIds([]);
+    setMoveHistory((nextState.moves ?? []).map((move) => ({
+      id: `online-${move.id}`,
+      playerName: move.player_name,
+      score: move.score,
+      tileIds: move.placements.map((placement) => placement.tileId ?? placement.tile_id ?? "").filter(Boolean),
+      turn: move.turn,
+      words: move.words.map((word) => ({ score: 0, word })),
+    })));
+    window.localStorage.setItem("skrabaj-active-match", nextState.match.id);
     if (nextState.match.status !== "waiting") setOnlineModalOpen(false);
 
     if (nextState.match.status === "waiting") {
       setNotice("Партија је направљена. Пошаљи позивни код другом играчу.");
-    } else if (nextState.match.status === "completed") {
+    } else if (nextState.match.status === "completed" || nextState.match.status === "abandoned") {
       setResultModalOpen(true);
       setNotice(
         nextState.match.winner_id === null
@@ -191,7 +283,7 @@ export function GamePrototype() {
         if (error) {
           if (active) {
             setBackendStatus("offline");
-            setNotice(`Сервис за игру тренутно није доступан: ${error.message}`);
+            setNotice("Онлајн игра тренутно није доступна, али офлајн вежба, дневни изазов и Букварко раде нормално.");
           }
           return;
         }
@@ -202,6 +294,16 @@ export function GamePrototype() {
       if (active) {
         setUserId(session?.user.id ?? null);
         setBackendStatus("ready");
+        const requestedCode = new URLSearchParams(window.location.search).get("match")?.toUpperCase() ?? "";
+        if (/^[A-F0-9]{6}$/.test(requestedCode)) {
+          setInitialInviteCode(requestedCode);
+          setOnlineModalOpen(true);
+        }
+        const savedMatchId = window.localStorage.getItem("skrabaj-active-match");
+        const { data: openMatches } = await supabase.rpc("list_my_open_matches");
+        const matches = (openMatches ?? []) as OpenMatch[];
+        const resumable = matches.find((match) => match.match_id === savedMatchId) ?? matches[0];
+        if (active && resumable?.match_id) setActiveMatchId(resumable.match_id);
       }
     }
 
@@ -255,6 +357,7 @@ export function GamePrototype() {
     () => getPendingPositions(game.board).length,
     [game.board],
   );
+  const lastMoveTileIds = moveHistory.at(-1)?.tileIds ?? [];
   const viewer = onlineState?.players.find((player) => player.user_id === userId) ?? null;
   const opponent = onlineState?.players.find((player) => player.user_id !== userId) ?? null;
   const isOnline = Boolean(activeMatchId && onlineState);
@@ -262,22 +365,24 @@ export function GamePrototype() {
     isOnline && onlineState?.match.status === "active" && onlineState.match.current_player_id === userId,
   );
   const matchComplete = isOnline
-    ? onlineState?.match.status === "completed"
-    : game.turn > MAX_TURNS;
+    ? onlineState?.match.status === "completed" || onlineState?.match.status === "abandoned"
+    : game.turn > (localMode === "bot" ? MAX_TURNS : MAX_ROUNDS);
   const currentRound = Math.min(
     MAX_ROUNDS,
-    Math.ceil(Math.min(game.turn, MAX_TURNS) / TURNS_PER_ROUND),
+    isOnline || localMode === "bot" ? Math.ceil(Math.min(game.turn, MAX_TURNS) / TURNS_PER_ROUND) : Math.min(game.turn, MAX_ROUNDS),
   );
-  const playerIsActive = !matchComplete && (!isOnline || canPlayOnline);
+  const playerIsActive = !matchComplete && (!botThinking && (!isOnline || canPlayOnline));
   const opponentIsActive = Boolean(
-    !matchComplete && isOnline && onlineState?.match.status === "active" && !canPlayOnline,
+    !matchComplete && ((isOnline && onlineState?.match.status === "active" && !canPlayOnline) || botThinking),
   );
   const exchangeUsed = isOnline ? (viewer?.exchange_used ?? true) : game.exchangeUsed;
   const bagCount = onlineState?.bag_count ?? game.bag.length;
   const exchangeAvailable = Boolean(
-    !matchComplete && playerIsActive && !exchangeUsed && bagCount > 0 && pendingCount === 0,
+    !matchComplete && playerIsActive && !botThinking && !exchangeUsed && bagCount > 0 && pendingCount === 0,
   );
-  const resultKind: GameResultKind = isOnline
+  const resultKind: GameResultKind = localMode === "bot"
+    ? game.score === botScore ? "draw" : game.score > botScore ? "win" : "lose"
+    : isOnline
     ? onlineState?.match.winner_id === null
       ? "draw"
       : onlineState?.match.winner_id === onlineState?.viewer_id
@@ -289,6 +394,47 @@ export function GamePrototype() {
     if (tileIds.length === 0) return;
     moveFeedbackSequence.current += 1;
     setMoveFeedback({ kind, tileIds, sequence: moveFeedbackSequence.current });
+    if (soundEnabled) {
+      navigator.vibrate?.(kind === "accepted" ? 24 : [20, 35, 20]);
+      const AudioContextClass = window.AudioContext;
+      if (AudioContextClass) {
+        const context = new AudioContextClass();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.frequency.value = kind === "accepted" ? 660 : 180;
+        gain.gain.setValueAtTime(0.035, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.12);
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.12);
+        oscillator.addEventListener("ended", () => void context.close(), { once: true });
+      }
+    }
+  }
+
+  function closeTutorial() {
+    window.localStorage.setItem("skrabaj-tutorial-seen", "yes");
+    setTutorialOpen(false);
+  }
+
+  function toggleSound() {
+    setSoundEnabled((current) => {
+      const next = !current;
+      window.localStorage.setItem("skrabaj-sound", next ? "on" : "off");
+      return next;
+    });
+  }
+
+  async function enableTurnNotifications() {
+    if (typeof Notification === "undefined") {
+      setNotice("Овај прегледач не подржава обавештења.");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    const enabled = permission === "granted";
+    window.localStorage.setItem("skrabaj-notifications", enabled ? "on" : "off");
+    setNotificationsEnabled(enabled);
+    setNotice(enabled ? "Обавестићемо те када поново будеш на потезу." : "Обавештења нису укључена.");
   }
 
   function resetSelection() {
@@ -314,23 +460,116 @@ export function GamePrototype() {
   }
 
   function startNewGame() {
+    window.localStorage.removeItem("skrabaj-active-match");
     setActiveMatchId(null);
     setOnlineState(null);
     setResultModalOpen(false);
     setMoveFeedback(null);
+    setMoveHistory([]);
+    setHistoryOpen(false);
+    setLastRejectedWords([]);
+    setLocalMode("practice");
+    setBotRack([]);
+    setBotScore(0);
+    setBotThinking(false);
     setGame(buildNewGame());
     resetSelection();
     setNotice("Нова партија је спремна. Прва реч иде преко звезде.");
   }
 
+  function startDailyChallenge() {
+    window.localStorage.removeItem("skrabaj-active-match");
+    setActiveMatchId(null);
+    setOnlineState(null);
+    setResultModalOpen(false);
+    setMoveFeedback(null);
+    setMoveHistory([]);
+    setHistoryOpen(false);
+    setLastRejectedWords([]);
+    setLocalMode("daily");
+    setGame(buildNewGame(seededRandom(dailySeed())));
+    resetSelection();
+    setNotice("Дневни изазов је почео. Имаш пет потеза са истим словима као и сви данас.");
+  }
+
+  function startBotGame() {
+    const session = buildBotGame();
+    window.localStorage.removeItem("skrabaj-active-match");
+    setActiveMatchId(null);
+    setOnlineState(null);
+    setResultModalOpen(false);
+    setMoveFeedback(null);
+    setMoveHistory([]);
+    setHistoryOpen(false);
+    setLastRejectedWords([]);
+    setLocalMode("bot");
+    setGame(session.game);
+    setBotRack(session.botRack);
+    setBotScore(0);
+    setBotThinking(false);
+    resetSelection();
+    setNotice("Игра против Букварка је спремна. Имате по пет потеза.");
+  }
+
+  async function playBotTurn(stateAfterPlayer: GameState) {
+    setBotThinking(true);
+    setNotice("Букварко тражи најбољу реч…");
+    await new Promise((resolve) => window.setTimeout(resolve, 260));
+    const dictionary = await loadLocalDictionary();
+    const move = findBotMove(stateAfterPlayer.board, botRack, dictionary);
+    if (!move) {
+      const next = { ...stateAfterPlayer, turn: stateAfterPlayer.turn + 1 };
+      setGame(next);
+      setMoveHistory((current) => [...current, { id: `bot-${stateAfterPlayer.turn}`, playerName: "Букварко", score: 0, tileIds: [], turn: stateAfterPlayer.turn, words: [] }]);
+      setNotice("Букварко прескаче. Твој потез.");
+      setBotThinking(false);
+      if (next.turn > MAX_TURNS) setResultModalOpen(true);
+      return;
+    }
+    const remainingRack = botRack.filter((tile) => !move.usedTileIds.includes(tile.id));
+    const refill = drawTiles(stateAfterPlayer.bag, RACK_SIZE - remainingRack.length);
+    const next = {
+      ...stateAfterPlayer,
+      bag: refill.bag,
+      board: commitMove(move.board),
+      turn: stateAfterPlayer.turn + 1,
+    };
+    setBotRack([...remainingRack, ...refill.drawn]);
+    setBotScore((current) => current + move.score);
+    setGame(next);
+    setMoveHistory((current) => [...current, {
+      id: `bot-${stateAfterPlayer.turn}`,
+      playerName: "Букварко",
+      score: move.score,
+      tileIds: move.tileIds,
+      turn: stateAfterPlayer.turn,
+      words: move.words,
+    }]);
+    triggerMoveFeedback("accepted", move.tileIds);
+    setNotice(`Букварко: ${move.words.map(({ word }) => word).join(" + ")} · +${move.score}. Твој потез.`);
+    setBotThinking(false);
+    if (next.turn > MAX_TURNS) setResultModalOpen(true);
+  }
+
+  async function reportRejectedWords() {
+    if (lastRejectedWords.length === 0) return;
+    if (supabase && userId) {
+      const client = supabase;
+      await Promise.all(lastRejectedWords.map((word) => client.rpc("report_dictionary_word", {
+        p_word: word,
+        p_match_id: isOnline ? onlineState?.match.id ?? null : null,
+      })));
+    } else {
+      const saved = JSON.parse(window.localStorage.getItem("skrabaj-word-reports") ?? "[]") as string[];
+      window.localStorage.setItem("skrabaj-word-reports", JSON.stringify([...new Set([...saved, ...lastRejectedWords])]));
+    }
+    setNotice("Хвала — реч је послата на проверу.");
+    setLastRejectedWords([]);
+  }
+
   function openOnlineLobby() {
     setOnlineDisplayName((current) => current || window.localStorage.getItem("skrabaj-display-name") || "");
     setOnlineModalOpen(true);
-  }
-
-  function openNewOnlineGame() {
-    startNewGame();
-    openOnlineLobby();
   }
 
   async function createOnlineMatch(displayName: string) {
@@ -358,6 +597,32 @@ export function GamePrototype() {
       applyOnlineMatchState(state as OnlineMatchState);
     }
     setOnlineLoading(false);
+  }
+
+  async function resignOnlineMatch() {
+    if (!supabase || !onlineState || !window.confirm("Сигурно желиш да предаш ову партију?")) return;
+    setSubmitting(true);
+    const { data, error } = await supabase.rpc("resign_match", { p_match_id: onlineState.match.id });
+    if (error) setNotice(`Предаја није успела: ${error.message}`);
+    else applyOnlineMatchState(data as OnlineMatchState);
+    setSubmitting(false);
+  }
+
+  async function rematchOnline() {
+    if (!supabase || !onlineState || !isOnline) {
+      startNewGame();
+      return;
+    }
+    setSubmitting(true);
+    const { data, error } = await supabase.rpc("create_rematch", { p_match_id: onlineState.match.id });
+    if (error) setNotice(`Реванш није направљен: ${error.message}`);
+    else {
+      const next = data as OnlineMatchState;
+      setActiveMatchId(next.match.id);
+      setResultModalOpen(false);
+      applyOnlineMatchState(next);
+    }
+    setSubmitting(false);
   }
 
   async function joinOnlineMatch(displayName: string, inviteCode: string) {
@@ -490,6 +755,51 @@ export function GamePrototype() {
     );
   }
 
+  function shuffleRack() {
+    setGame((current) => ({ ...current, rack: shuffleTiles(current.rack) }));
+    resetSelection();
+    setNotice("Слова на сталку су промешана.");
+  }
+
+  function sortRack() {
+    setGame((current) => ({
+      ...current,
+      rack: [...current.rack].sort((left, right) =>
+        (left.letter ?? "ШШ").localeCompare(right.letter ?? "ШШ", "sr-Cyrl"),
+      ),
+    }));
+    resetSelection();
+    setNotice("Слова су сложена по азбучном реду.");
+  }
+
+  function startTileDrag(event: DragEvent<HTMLButtonElement>, tile: RackTile) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", tile.id);
+    selectRackTile(tile);
+  }
+
+  function dropTile(event: DragEvent<HTMLButtonElement>, row: number, col: number) {
+    event.preventDefault();
+    handleBoardCell(row, col);
+  }
+
+  function reorderRack(event: DragEvent<HTMLButtonElement>, targetTileId: string) {
+    event.preventDefault();
+    const sourceTileId = event.dataTransfer.getData("text/plain");
+    if (!sourceTileId || sourceTileId === targetTileId) return;
+    setGame((current) => {
+      const rack = [...current.rack];
+      const sourceIndex = rack.findIndex((tile) => tile.id === sourceTileId);
+      const targetIndex = rack.findIndex((tile) => tile.id === targetTileId);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const [tile] = rack.splice(sourceIndex, 1);
+      rack.splice(targetIndex, 0, tile);
+      return { ...current, rack };
+    });
+    resetSelection();
+    setNotice("Редослед слова на сталку је промењен.");
+  }
+
   function handleBoardCell(row: number, col: number) {
     setMoveFeedback(null);
     if (matchComplete) {
@@ -550,7 +860,7 @@ export function GamePrototype() {
       board: nextBoard,
       rack: current.rack.filter((tile) => tile.id !== selectedTile.id),
     }));
-    if (game.turn >= MAX_TURNS) setResultModalOpen(true);
+    if (!isOnline && game.turn >= MAX_ROUNDS) setResultModalOpen(true);
     resetSelection();
     setNotice(`Постављено: ${letter}.`);
   }
@@ -585,7 +895,7 @@ export function GamePrototype() {
   }
 
   async function submitMove() {
-    if (submitting) return;
+    if (submitting || botThinking) return;
     if (matchComplete) {
       setNotice("Партија је завршена после пет рунди.");
       return;
@@ -620,6 +930,7 @@ export function GamePrototype() {
       if (error) {
         setSubmitting(false);
         triggerMoveFeedback("rejected", pendingTileIds);
+        setLastRejectedWords(result.words.map(({ word }) => word));
         setNotice(`Потез није прихваћен: ${error.message}`);
         return;
       }
@@ -636,40 +947,81 @@ export function GamePrototype() {
       });
 
       if (error) {
-        setSubmitting(false);
-        triggerMoveFeedback("rejected", pendingTileIds);
-        setNotice(`Провера речника није успела: ${error.message}`);
-        return;
+        try {
+          const rejected = await checkLocalWords(words);
+          if (rejected.length) {
+            setSubmitting(false);
+            triggerMoveFeedback("rejected", pendingTileIds);
+            setNotice(`Речник не прихвата: ${rejected.join(", ")}.`);
+            setLastRejectedWords(rejected);
+            return;
+          }
+          setBackendStatus("offline");
+        } catch {
+          setSubmitting(false);
+          triggerMoveFeedback("rejected", pendingTileIds);
+          setNotice(`Провера речника није успела: ${error.message}`);
+          return;
+        }
+      } else {
+        const checkedWords = (data ?? []) as DictionaryCheckResult[];
+        const accepted = new Set(
+          checkedWords
+            .filter((entry) => entry.accepted)
+            .map((entry) => entry.word),
+        );
+        const rejected = words.filter((word) => !accepted.has(word));
+        if (rejected.length) {
+          setSubmitting(false);
+          triggerMoveFeedback("rejected", pendingTileIds);
+          setNotice(`Речник не прихвата: ${rejected.join(", ")}.`);
+          setLastRejectedWords(rejected);
+          return;
+        }
       }
-
-      const checkedWords = (data ?? []) as DictionaryCheckResult[];
-      const accepted = new Set(
-        checkedWords
-          .filter((entry) => entry.accepted)
-          .map((entry) => entry.word),
-      );
-      const rejected = words.filter((word) => !accepted.has(word));
+    } else {
+      const rejected = await checkLocalWords(result.words.map(({ word }) => word));
       if (rejected.length) {
         setSubmitting(false);
         triggerMoveFeedback("rejected", pendingTileIds);
         setNotice(`Речник не прихвата: ${rejected.join(", ")}.`);
+        setLastRejectedWords(rejected);
         return;
       }
     }
 
     const refill = drawTiles(game.bag, RACK_SIZE - game.rack.length);
-    setGame((current) => ({
-      ...current,
-      board: commitMove(current.board),
+    const nextGame: GameState = {
+      ...game,
+      board: commitMove(game.board),
       bag: refill.bag,
-      rack: [...current.rack, ...refill.drawn],
-      score: current.score + result.score,
-      turn: current.turn + 1,
-    }));
+      rack: [...game.rack, ...refill.drawn],
+      score: game.score + result.score,
+      turn: game.turn + 1,
+    };
+    setGame(nextGame);
     triggerMoveFeedback("accepted", pendingTileIds);
+    setMoveHistory((current) => [
+      ...current,
+      {
+        id: `local-${game.turn}`,
+        playerName: "Играч",
+        score: result.score,
+        tileIds: pendingTileIds,
+        turn: game.turn,
+        words: result.words.map(({ score, word }) => ({ score, word })),
+      },
+    ]);
+    setLastRejectedWords([]);
+    if (localMode === "daily" && game.turn >= MAX_ROUNDS) {
+      const finalScore = game.score + result.score;
+      window.localStorage.setItem(`skrabaj-daily-${dailySeed()}`, String(Math.max(dailyBest, finalScore)));
+      setDailyBest((current) => Math.max(current, finalScore));
+    }
     resetSelection();
+    const localFinished = localMode !== "bot" && game.turn >= MAX_ROUNDS;
     setNotice(
-      game.turn >= MAX_TURNS
+      localFinished
         ? `Пет рунди је завршено. Освојено: ${game.score + result.score} поена.`
         : `${result.words.map(({ word }) => word).join(" + ")} · +${result.score} поена. ` +
           (supabase
@@ -677,6 +1029,7 @@ export function GamePrototype() {
             : "Потез је прихваћен без серверске провере речника."),
     );
     setSubmitting(false);
+    if (localMode === "bot") void playBotTurn(nextGame);
   }
 
   return (
@@ -695,6 +1048,12 @@ export function GamePrototype() {
             <span className="status-dot" aria-hidden="true" />
             <span>Играј</span>
           </button>
+          <button aria-label="Дневни изазов" className="nav-button nav-button--icon" onClick={startDailyChallenge} title="Дневни изазов" type="button">
+            <span aria-hidden="true">☀</span><span className="desktop-label">Данас</span>
+          </button>
+          <button aria-label="Игра против Букварка" className="nav-button nav-button--icon" onClick={startBotGame} title="Игра против Букварка" type="button">
+            <span aria-hidden="true">Б</span><span className="desktop-label">Букварко</span>
+          </button>
           <button aria-label="Правила" className="nav-button nav-button--icon" onClick={() => setOpenModal("rules")} title="Правила" type="button">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 17.2v.1M9.8 9.2a2.3 2.3 0 1 1 3.6 1.9c-.9.6-1.4 1.1-1.4 2.2"/><circle cx="12" cy="12" r="9"/></svg>
             <span className="desktop-label">Правила</span>
@@ -703,10 +1062,13 @@ export function GamePrototype() {
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v1.5A3.5 3.5 0 0 0 8.5 11M16 6h3v1.5a3.5 3.5 0 0 1-3.5 3.5M12 12v4M9 20h6M10 16h4v4"/></svg>
             <span className="desktop-label">Табела</span>
           </button>
+          <button aria-label={soundEnabled ? "Искључи звук" : "Укључи звук"} className="nav-button nav-button--icon" onClick={toggleSound} title={soundEnabled ? "Искључи звук" : "Укључи звук"} type="button">
+            <span aria-hidden="true">{soundEnabled ? "♪" : "×"}</span>
+          </button>
         </div>
       </header>
 
-      <section className="intro" id="top">
+      <section className={`intro ${game.turn > 1 || pendingCount > 0 || isOnline ? "intro--playing" : ""}`} id="top">
         <div>
           <p className="eyebrow">ТЕМЕЉ ИГРЕ · ВЕРЗИЈА 0.1</p>
           <h1>Освоји таблу.<br />Слово по слово.</h1>
@@ -732,18 +1094,21 @@ export function GamePrototype() {
           <p>
             {onlineState.match.status === "waiting"
               ? "Пошаљи код другом играчу."
-              : onlineState.match.status === "completed"
+              : onlineState.match.status === "completed" || onlineState.match.status === "abandoned"
                 ? "Партија је завршена."
                 : canPlayOnline ? "Твој потез" : "Ривал је на потезу"}
           </p>
-          <button onClick={startNewGame} type="button">Изађи</button>
+          <div className="match-banner__actions">
+            {onlineState.match.status === "active" && <button onClick={resignOnlineMatch} type="button">Предај</button>}
+            <button onClick={startNewGame} type="button">Изађи</button>
+          </div>
         </section>
       )}
 
       <section className="match-strip" aria-label="Стање партије">
         <div className={`player-card ${playerIsActive ? "active-player" : ""}`}>
           <span className="avatar">ТИ</span>
-          <span><small>{playerIsActive ? "НА ПОТЕЗУ" : "ИГРАЧ"}</small><strong>{viewer?.display_name ?? "Играч"}</strong></span>
+          <span><small>{playerIsActive ? "НА ПОТЕЗУ" : "ИГРАЧ"}</small><strong>{viewer?.display_name ?? (localMode === "daily" ? "Дневни изазов" : "Играч")}</strong></span>
           <b>{game.score}</b>
         </div>
         <div className="round-indicator" aria-label={`Рунда ${currentRound} од ${MAX_ROUNDS}`}>
@@ -761,9 +1126,9 @@ export function GamePrototype() {
           </div>
         </div>
         <div className={`player-card ${opponentIsActive ? "active-player" : ""} ${opponent ? "" : "future-player"}`}>
-          <span className="avatar">{opponent ? "РИ" : "?"}</span>
-          <span><small>{opponentIsActive ? "НА ПОТЕЗУ" : "ПРОТИВНИК"}</small><strong>{opponent?.display_name ?? "Противник"}</strong></span>
-          <b>{opponent?.score ?? "—"}</b>
+          <span className="avatar">{localMode === "bot" ? "Б" : opponent ? "РИ" : "?"}</span>
+          <span><small>{opponentIsActive ? "НА ПОТЕЗУ" : "ПРОТИВНИК"}</small><strong>{localMode === "bot" ? "Букварко" : opponent?.display_name ?? "Противник"}</strong></span>
+          <b>{localMode === "bot" ? botScore : opponent?.score ?? "—"}</b>
         </div>
       </section>
 
@@ -791,11 +1156,13 @@ export function GamePrototype() {
                             ? PREMIUM_LABELS[premium].replace("\n", " ")
                             : `Поље ${row + 1}, ${col + 1}`
                       }
-                      className={`board-cell ${premium ?? ""} ${tile ? "occupied" : ""}`}
+                      className={`board-cell ${premium ?? ""} ${tile ? "occupied" : ""} ${tile && lastMoveTileIds.includes(tile.id) ? "last-move" : ""}`}
                       data-cell={`${row}-${col}`}
                       key={`${row}-${col}`}
-                      disabled={matchComplete || (isOnline && !canPlayOnline)}
+                      disabled={matchComplete || botThinking || (isOnline && !canPlayOnline)}
                       onClick={() => handleBoardCell(row, col)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => dropTile(event, row, col)}
                       role="gridcell"
                       type="button"
                     >
@@ -827,7 +1194,11 @@ export function GamePrototype() {
           <div className="rack-section">
             <div className="rack-heading">
               <span><small>ТВОЈА СЛОВА</small><strong>Слова</strong></span>
-              <span className="bag-count">У врећици <b>{bagCount}</b></span>
+              <span className="rack-heading__tools">
+                <button disabled={pendingCount > 0 || exchangeMode} onClick={shuffleRack} type="button">Промешај</button>
+                <button disabled={pendingCount > 0 || exchangeMode} onClick={sortRack} type="button">Сложи</button>
+                <span className="bag-count">У врећици <b>{bagCount}</b></span>
+              </span>
             </div>
             <div className="rack" aria-label="Сталак са словима">
               {game.rack.map((tile) => (
@@ -835,9 +1206,13 @@ export function GamePrototype() {
                   aria-pressed={exchangeMode ? exchangeTileIds.includes(tile.id) : selectedTileId === tile.id}
                   className={`letter-tile rack-tile ${exchangeMode && exchangeTileIds.includes(tile.id) ? "exchange-selected" : selectedTileId === tile.id ? "selected" : ""}`}
                   data-tile-id={tile.id}
-                  disabled={matchComplete || (isOnline && !canPlayOnline)}
+                  disabled={matchComplete || botThinking || (isOnline && !canPlayOnline)}
+                  draggable={!matchComplete && !botThinking && (!isOnline || canPlayOnline)}
                   key={tile.id}
                   onClick={() => selectRackTile(tile)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragStart={(event) => startTileDrag(event, tile)}
+                  onDrop={(event) => reorderRack(event, tile.id)}
                   type="button"
                 >
                   <strong>{tile.letter ?? "★"}</strong>
@@ -855,6 +1230,20 @@ export function GamePrototype() {
           <div className={`notice ${moveFeedback?.kind === "rejected" ? "notice-rejected" : moveFeedback?.kind === "accepted" || evaluation.valid ? "notice-valid" : ""}`} aria-live="polite">
             <span aria-hidden="true">{moveFeedback?.kind === "rejected" ? "×" : moveFeedback?.kind === "accepted" || evaluation.valid ? "✓" : "i"}</span>
             <p>{notice}</p>
+          </div>
+          {lastRejectedWords.length > 0 && (
+            <button className="report-word" onClick={reportRejectedWords} type="button">Пријави реч за проверу</button>
+          )}
+          {localMode === "daily" && <p className="daily-best">Данашњи рекорд на овом уређају: <b>{dailyBest}</b></p>}
+
+          <div className={`word-preview ${evaluation.words.length ? "" : "word-preview--empty"}`}>
+            <small>ПОТЕЗ ПРАВИ</small>
+            {evaluation.words.map((word) => (
+              <div key={word.positions.map(({ row, col }) => `${row}-${col}`).join("|")}>
+                <strong>{word.word}</strong><span>+{word.score}</span>
+              </div>
+            ))}
+            {evaluation.words.length > 1 && <p>Сва укрштања се сабирају у укупан резултат.</p>}
           </div>
 
           {selectedTile?.letter === null && (
@@ -899,12 +1288,32 @@ export function GamePrototype() {
                 Прескочи
               </button>
             )}
+            {moveHistory.length > 0 && (
+              <button className="secondary-action" onClick={() => setHistoryOpen((current) => !current)} type="button">
+                {historyOpen ? "Сакриј потезе" : `Потези (${moveHistory.length})`}
+              </button>
+            )}
+            {isOnline && !canPlayOnline && !notificationsEnabled && (
+              <button className="secondary-action" onClick={enableTurnNotifications} type="button">Обавести ме</button>
+            )}
           </div>
+
+          {historyOpen && (
+            <ol className="move-history">
+              {[...moveHistory].reverse().map((move) => (
+                <li key={move.id}>
+                  <span>{move.turn}. {move.playerName}</span>
+                  <strong>{move.words.map(({ word }) => word).join(" + ")}</strong>
+                  <b>+{move.score}</b>
+                </li>
+              ))}
+            </ol>
+          )}
 
           <div className="turn-actions">
             <button
               className="primary-action"
-              disabled={submitting || matchComplete || (isOnline && !canPlayOnline) || (exchangeMode && exchangeTileIds.length === 0)}
+              disabled={submitting || botThinking || matchComplete || (isOnline && !canPlayOnline) || (exchangeMode && exchangeTileIds.length === 0)}
               onClick={exchangeMode ? exchangeSelectedTiles : submitMove}
               type="button"
             >
@@ -918,6 +1327,15 @@ export function GamePrototype() {
           </div>
         </aside>
       </section>
+      {tutorialOpen && (
+        <div className="tutorial-card" role="dialog" aria-label="Брзи водич">
+          <button aria-label="Затвори водич" onClick={closeTutorial} type="button">×</button>
+          <small>ПРВИ ПОТЕЗ</small>
+          <strong>1. Изабери слово · 2. Додирни звезду · 3. Потврди реч</strong>
+          <p>Наранџасти оквир показује слова текућег потеза, а резултат се рачуна пре потврде.</p>
+          <button className="tutorial-done" onClick={closeTutorial} type="button">Разумем</button>
+        </div>
+      )}
       {openModal === "rules" && <RulesModal onClose={() => setOpenModal(null)} />}
       {openModal === "leaderboard" && (
         <LeaderboardModal
@@ -935,19 +1353,21 @@ export function GamePrototype() {
           onCreate={createOnlineMatch}
           onDisplayNameChange={setOnlineDisplayName}
           onJoin={joinOnlineMatch}
+          initialInviteCode={initialInviteCode}
         />
       )}
       {resultModalOpen && matchComplete && (
         <GameResultModal
+          actionLabel={isOnline ? "РЕВАНШ" : "НОВА ПАРТИЈА"}
           kind={resultKind}
           onClose={() => setResultModalOpen(false)}
-          onNewGame={openNewOnlineGame}
+          onNewGame={isOnline ? rematchOnline : localMode === "bot" ? startBotGame : localMode === "daily" ? startDailyChallenge : startNewGame}
           onOpenLeaderboard={() => {
             setResultModalOpen(false);
             void openLeaderboard();
           }}
-          opponentName={opponent?.display_name}
-          opponentScore={opponent?.score}
+          opponentName={localMode === "bot" ? "Букварко" : opponent?.display_name}
+          opponentScore={localMode === "bot" ? botScore : opponent?.score}
           playerName={viewer?.display_name ?? "Играч"}
           playerScore={game.score}
         />

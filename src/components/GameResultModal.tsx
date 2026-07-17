@@ -5,6 +5,7 @@ import { AppModal } from "@/components/AppModal";
 export type GameResultKind = "win" | "lose" | "draw" | "summary";
 
 interface GameResultModalProps {
+  actionLabel?: string;
   kind: GameResultKind;
   onClose: () => void;
   onNewGame: () => void;
@@ -43,6 +44,7 @@ const RESULT_COPY: Record<GameResultKind, { eyebrow: string; icon: string; title
 };
 
 export function GameResultModal({
+  actionLabel = "НОВА ПАРТИЈА",
   kind,
   onClose,
   onNewGame,
@@ -79,7 +81,7 @@ export function GameResultModal({
         </div>
 
         <button className="primary-action modal-action result-rematch" onClick={onNewGame} type="button">
-          <span>НОВА ПАРТИЈА</span><b>→</b>
+          <span>{actionLabel}</span><b>→</b>
         </button>
         <button className="result-table-link" onClick={onOpenLeaderboard} type="button">
           Погледај табелу

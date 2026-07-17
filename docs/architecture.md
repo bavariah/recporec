@@ -19,6 +19,8 @@ deployable and prevents a change in one game from breaking the other.
   by Rules and Leaderboard without changing board layout or scroll position.
 - `scripts/` owns repeatable dictionary extraction, normalization, audit, and
   export. Dictionary data never needs to be hand-edited in application code.
+- The same pipeline emits `public/dictionary.txt`; the service worker caches it
+  for offline validation and the dictionary-driven solo opponent.
 - `supabase/migrations/` contains version-controlled schema work for the future
   standalone backend and is already exercised against the local Supabase stack.
 - Local anonymous users receive a profile automatically. Browser clients can
@@ -34,6 +36,10 @@ deployable and prevents a change in one game from breaking the other.
 - `get_leaderboard()` exposes completed-match aggregates only: games, wins,
   losses, total points, and average points. It does not expose private matches,
   racks, bags, or move history.
+- Match state includes sanitized move summaries. Invite links, resumable-match
+  discovery, resigning, word reports, and rematches remain RPC-controlled.
+- Balance telemetry is aggregate-only and never returns names, invite codes,
+  private racks, or per-player histories.
 
 ## Dictionary policy
 
@@ -54,12 +60,12 @@ and Џ one database character, one board tile, and one unit of word length.
 ## Next backend phase
 
 When the production Supabase project is available, apply the existing migrations
-and set the public frontend environment values. The remaining product work is:
+and set the public frontend environment values. The remaining production work is:
 
 1. finalize the smaller 8×8 tile distribution, values, exchange, and end rules;
 2. add named account upgrades for players who want persistent identity;
-3. add reconnect/resume discovery and optional turn-timeout rules;
-4. add rate-limited challenges and matchmaking.
+3. decide whether ranked games need an explicit turn-timeout rule;
+4. add rate-limited public matchmaking if invite-only play is not sufficient.
 
 The browser may preview a move, but the server must be authoritative for tile
 draws, dictionary acceptance, scoring, turn order, and win state.

@@ -302,3 +302,8 @@ console.log(
     2,
   ),
 );
+
+await Promise.all([
+  playerOne.realtime.disconnect(),
+  playerTwo.realtime.disconnect(),
+]);

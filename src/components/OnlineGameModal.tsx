@@ -11,6 +11,7 @@ interface OnlineGameModalProps {
   onCreate: (displayName: string) => Promise<void>;
   onDisplayNameChange: (displayName: string) => void;
   onJoin: (displayName: string, inviteCode: string) => Promise<void>;
+  initialInviteCode?: string;
 }
 
 export function OnlineGameModal({
@@ -21,8 +22,9 @@ export function OnlineGameModal({
   onCreate,
   onDisplayNameChange,
   onJoin,
+  initialInviteCode = "",
 }: OnlineGameModalProps) {
-  const [inviteCode, setInviteCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(initialInviteCode);
   const [copied, setCopied] = useState(false);
 
   function rememberName() {
@@ -36,6 +38,18 @@ export function OnlineGameModal({
     window.setTimeout(() => setCopied(false), 1800);
   }
 
+  async function shareInvite() {
+    if (!activeCode) return;
+    const url = `${window.location.origin}${window.location.pathname}?match=${activeCode}`;
+    if (navigator.share) {
+      await navigator.share({ title: "Шкрабај", text: "Придружи ми се у Шкрабају", url });
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  }
+
   return (
     <AppModal eyebrow="ИГРА УДВОЈЕ" onClose={onClose} title="Онлајн партија">
       {activeCode ? (
@@ -45,6 +59,9 @@ export function OnlineGameModal({
           <p>Пошаљи овај код другом играчу. Партија почиње чим се придружи.</p>
           <button className="secondary-action modal-action invite-copy" onClick={copyInviteCode} type="button">
             {copied ? "Код је копиран ✓" : "Копирај позивни код"}
+          </button>
+          <button className="secondary-action modal-action invite-copy" onClick={shareInvite} type="button">
+            Подели линк за партију
           </button>
           <button className="primary-action modal-action" onClick={onClose} type="button">
             Врати се на таблу <span>→</span>
