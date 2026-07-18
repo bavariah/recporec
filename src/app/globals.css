@@ -32,7 +32,7 @@ body {
     radial-gradient(circle at 5% 0%, rgba(89, 201, 170, 0.2), transparent 28rem),
     radial-gradient(circle at 98% 12%, rgba(255, 181, 27, 0.13), transparent 24rem),
     var(--cream);
-  font-family: "Segoe UI Variable Text", "Aptos", "Noto Sans", Arial, sans-serif;
+  font-family: var(--font-sans), "Segoe UI Variable Text", "Noto Sans", Arial, sans-serif;
 }
 
 button,
@@ -89,7 +89,7 @@ button {
 }
 
 .brand-mark b {
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: 27px;
   font-weight: 900;
   line-height: 1;
@@ -116,7 +116,7 @@ button {
 }
 
 .brand-copy strong {
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: 21px;
   font-weight: 900;
   letter-spacing: 0.11em;
@@ -274,7 +274,7 @@ button {
 .intro h1 {
   max-width: 700px;
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: clamp(43px, 7vw, 76px);
   font-weight: 800;
   letter-spacing: -0.055em;
@@ -403,7 +403,7 @@ button {
 }
 
 .match-banner span strong {
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 19px;
   letter-spacing: 0.08em;
 }
@@ -455,18 +455,34 @@ button {
   box-shadow: 0 7px 20px rgba(16, 47, 50, 0.08);
 }
 
-.player-card:first-child {
+.player-card:first-child:not(.active-player) {
   border-radius: 12px 0 0 12px;
 }
 
-.player-card:last-child {
+.player-card:last-child:not(.active-player) {
   border-radius: 0 12px 12px 0;
 }
 
-.active-player {
-  border-top: 3px solid var(--orange);
-  background: linear-gradient(180deg, #fff9f4, #f8fbf8);
-  box-shadow: inset 0 3px 9px rgba(242, 100, 54, 0.08), 0 7px 20px rgba(16, 47, 50, 0.08);
+.player-card.active-player {
+  color: #fff;
+  background: var(--orange);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.active-player .avatar {
+  color: var(--orange-dark);
+  background: #fff;
+}
+
+.active-player small {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.active-player strong,
+.active-player > b {
+  color: #fff;
 }
 
 .future-player {
@@ -506,14 +522,14 @@ button {
 
 .player-card strong {
   margin-top: 3px;
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: 17px;
   font-weight: 900;
 }
 
 .player-card > b {
   color: #12383a;
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: 29px;
   font-weight: 900;
 }
@@ -663,9 +679,9 @@ button {
 }
 
 .premium-label em {
-  font-size: clamp(7px, 0.9vw, 11px);
+  font-size: 9px;
   font-style: normal;
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-weight: 900;
   letter-spacing: 0.04em;
 }
@@ -683,7 +699,7 @@ button {
 }
 
 .letter-tile strong {
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: clamp(23px, 4vw, 40px);
   font-weight: 900;
   letter-spacing: -0.04em;
@@ -697,7 +713,7 @@ button {
   bottom: 5%;
   font-size: clamp(8px, 1vw, 12px);
   color: #285254;
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-weight: 900;
 }
 
@@ -825,7 +841,7 @@ button {
 }
 
 .rack-heading strong {
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: 17px;
   font-weight: 900;
 }
@@ -921,13 +937,13 @@ button {
 
 .score-preview strong {
   margin-top: 4px;
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 18px;
 }
 
 .score-preview > b {
   color: var(--orange-dark);
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 35px;
 }
 
@@ -1031,7 +1047,7 @@ button {
 }
 
 .word-preview > div strong {
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 20px;
 }
 
@@ -1077,7 +1093,7 @@ button {
 
 .move-history strong {
   overflow: hidden;
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1128,7 +1144,7 @@ button {
 }
 
 .tutorial-card strong {
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 16px;
   line-height: 1.35;
 }
@@ -1171,7 +1187,7 @@ button {
   border: 1px solid #d5cec0;
   border-radius: 4px;
   cursor: pointer;
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 12px;
   font-weight: 900;
 }
@@ -1240,7 +1256,7 @@ button {
   position: absolute;
   right: 17px;
   color: #79dfc1;
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 19px;
 }
 
@@ -1269,7 +1285,7 @@ button {
 
 .phase-note > span {
   color: var(--orange-dark);
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 19px;
   font-weight: 900;
 }
@@ -1341,7 +1357,7 @@ button {
 
 .modal-header h2 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: clamp(27px, 5vw, 38px);
   line-height: 1;
 }
@@ -1424,13 +1440,13 @@ button {
 
 .rules-list li > span {
   color: var(--orange-dark);
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 19px;
   font-weight: 900;
 }
 
 .rules-list strong {
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 17px;
 }
 
@@ -1486,7 +1502,7 @@ button {
 }
 
 .online-form .invite-input {
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 21px;
   font-weight: 900;
   letter-spacing: 0.18em;
@@ -1533,7 +1549,7 @@ button {
 .invite-ready > strong {
   margin: 8px 0 4px;
   color: var(--forest);
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: clamp(42px, 12vw, 68px);
   letter-spacing: 0.12em;
 }
@@ -1611,7 +1627,7 @@ button {
 
 .leaderboard-table tbody th {
   min-width: 150px;
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   text-align: center;
 }
 
@@ -1679,7 +1695,7 @@ button {
   border: 5px solid #e5f8f1;
   border-radius: 50%;
   box-shadow: 0 8px 0 #166c58, 0 16px 28px rgba(20, 108, 88, 0.2);
-  font-family: Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 34px;
   font-weight: 900;
 }
@@ -1753,7 +1769,7 @@ button {
 
 .result-score b {
   color: var(--ink);
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: 34px;
 }
 
@@ -1935,11 +1951,11 @@ button {
     padding: 7px 8px;
   }
 
-  .player-card:first-child {
+  .player-card:first-child:not(.active-player) {
     border-radius: 8px 0 0 8px;
   }
 
-  .player-card:last-child {
+  .player-card:last-child:not(.active-player) {
     border-radius: 0 8px 8px 0;
   }
 
@@ -2027,7 +2043,7 @@ button {
   }
 
   .premium-label em {
-    font-size: 7px;
+    font-size: 9px;
     letter-spacing: -0.01em;
   }
 
@@ -2250,7 +2266,7 @@ button {
 
   .leaderboard-card > strong {
     overflow: hidden;
-    font-family: Georgia, serif;
+    font-family: var(--font-display), Georgia, serif;
     font-size: 16px;
     text-overflow: ellipsis;
     white-space: nowrap;

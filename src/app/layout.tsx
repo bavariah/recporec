@@ -1,6 +1,19 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Roboto_Slab } from "next/font/google";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import "./globals.css";
+
+const inter = Inter({
+  display: "swap",
+  subsets: ["cyrillic", "cyrillic-ext", "latin"],
+  variable: "--font-sans",
+});
+
+const robotoSlab = Roboto_Slab({
+  display: "swap",
+  subsets: ["cyrillic", "cyrillic-ext", "latin"],
+  variable: "--font-display",
+});
 
 export const metadata: Metadata = {
   title: "Шкрабај — српска игра речи",
@@ -30,7 +43,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="sr-Cyrl">
-      <body>
+      <body className={`${inter.variable} ${robotoSlab.variable}`}>
         <ServiceWorkerRegistration />
         {children}
       </body>
