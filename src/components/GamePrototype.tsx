@@ -1051,9 +1051,6 @@ export function GamePrototype() {
           <button aria-label="Дневни изазов" className="nav-button nav-button--icon" onClick={startDailyChallenge} title="Дневни изазов" type="button">
             <span aria-hidden="true">☀</span><span className="desktop-label">Данас</span>
           </button>
-          <button aria-label="Игра против Букварка" className="nav-button nav-button--icon" onClick={startBotGame} title="Игра против Букварка" type="button">
-            <span aria-hidden="true">Б</span><span className="desktop-label">Букварко</span>
-          </button>
           <button aria-label="Правила" className="nav-button nav-button--icon" onClick={() => setOpenModal("rules")} title="Правила" type="button">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 17.2v.1M9.8 9.2a2.3 2.3 0 1 1 3.6 1.9c-.9.6-1.4 1.1-1.4 2.2"/><circle cx="12" cy="12" r="9"/></svg>
             <span className="desktop-label">Правила</span>

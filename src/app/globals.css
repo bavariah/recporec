@@ -8,6 +8,8 @@
   --line: #d8ded9;
   --orange: #ff5b38;
   --orange-dark: #d94729;
+  --active-player: #b3432b;
+  --active-score: #35d6df;
   --gold: #ffb51b;
   --blue: #59c9aa;
   --blue-deep: #178c73;
@@ -465,24 +467,27 @@ button {
 
 .player-card.active-player {
   color: #fff;
-  background: var(--orange);
+  background: var(--active-player);
   border: 0;
   border-radius: 0;
   box-shadow: none;
 }
 
 .active-player .avatar {
-  color: var(--orange-dark);
-  background: #fff;
-}
-
-.active-player small {
-  color: rgba(255, 255, 255, 0.76);
-}
-
-.active-player strong,
-.active-player > b {
   color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.player-card.active-player small {
+  color: #fff;
+}
+
+.player-card.active-player strong {
+  color: #fff;
+}
+
+.player-card.active-player > b {
+  color: var(--active-score);
 }
 
 .future-player {
