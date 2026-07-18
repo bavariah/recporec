@@ -356,7 +356,7 @@ button {
 }
 
 .board-cell.letter2 {
-  background: linear-gradient(145deg, #a7ebe6 0%, #67c7c3 52%, #3e9fa1 100%);
+  background: linear-gradient(145deg, #66d4cf 0%, #279a9b 52%, #126a73 100%);
 }
 
 .legend-swatch.letter3 {
@@ -372,7 +372,7 @@ button {
 }
 
 .board-cell.word2 {
-  background: linear-gradient(145deg, #ffe69b 0%, #ffc45d 50%, #e49421 100%);
+  background: linear-gradient(145deg, #ffc957 0%, #e48b18 52%, #ae5203 100%);
 }
 
 .legend-swatch.word3 {
@@ -380,7 +380,7 @@ button {
 }
 
 .board-cell.word3 {
-  background: linear-gradient(145deg, #f27a55, #851900);
+  background: linear-gradient(145deg, #f36f50, #9d1200);
   border-color: rgba(91, 15, 0, 0.55);
 }
 
@@ -635,8 +635,8 @@ button {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(9, 1fr);
   width: 100%;
   gap: clamp(1px, 0.22vw, 3px);
   padding: clamp(2px, 0.35vw, 4px);
@@ -704,21 +704,30 @@ button {
   pointer-events: none;
 }
 
+.board-cell.start-cell {
+  background: linear-gradient(145deg, #f4efe0 0%, #e6d39c 58%, #c9a85b 100%);
+  border-color: rgba(117, 79, 20, 0.38);
+}
+
+.start-cell .premium-label b {
+  color: #103a72;
+  font-size: clamp(17px, 2.2vw, 27px);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72), 0 2px 5px rgba(16, 46, 104, 0.18);
+}
+
 .premium-label {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: #123d3f;
+  color: #fff;
   line-height: 1.05;
   text-align: center;
   text-transform: uppercase;
 }
 
-.word3 .premium-label,
-.letter3 .premium-label {
-  color: #f8ffff;
+.board-cell:not(.start-cell) .premium-label {
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
 }
 
@@ -897,6 +906,7 @@ button {
   cursor: pointer;
   font-size: 9px;
   font-weight: 900;
+  text-transform: uppercase;
   box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(16, 46, 104, 0.08);
 }
 
@@ -2204,6 +2214,8 @@ button {
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .panel-kicker,
@@ -2240,11 +2252,20 @@ button {
     left: 0;
     display: block;
     margin: 0;
-    padding: 8px max(10px, calc((100vw - 520px) / 2)) calc(8px + env(safe-area-inset-bottom));
+    padding: 0;
     background: rgba(255, 253, 248, 0.94);
     border-top: 0;
     box-shadow: 0 -10px 28px rgba(16, 46, 104, 0.13);
     backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .board-tile strong {
+    font-size: clamp(16px, 5.2vw, 24px);
+  }
+
+  .board-tile small {
+    font-size: clamp(7px, 2.3vw, 10px);
   }
 
   .tutorial-card {
@@ -2256,7 +2277,7 @@ button {
   .turn-actions .primary-action {
     width: 100%;
     min-height: 54px;
-    border-radius: 11px;
+    border-radius: 0;
     font-size: 14px;
   }
 

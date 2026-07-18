@@ -262,7 +262,7 @@ export function GamePrototype() {
 
   const applyOnlineMatchState = useCallback((nextState: OnlineMatchState) => {
     setOnlineState(nextState);
-    const board = nextState.match.board.length === BOARD_SIZE
+    const board = nextState.match.board.length === BOARD_SIZE && nextState.match.board.every((row) => row.length === BOARD_SIZE)
       ? nextState.match.board as Board
       : createEmptyBoard();
     const currentViewer = nextState.players.find((player) => player.user_id === nextState.viewer_id);
@@ -1257,7 +1257,7 @@ export function GamePrototype() {
       <section className="play-area">
         <div className="board-column">
           <div className="board-frame">
-            <div className="board" role="grid" aria-label="Табла 8 пута 8">
+            <div className="board" role="grid" aria-label="Табла 9 пута 9">
               {Array.from({ length: BOARD_SIZE }, (_, row) =>
                 Array.from({ length: BOARD_SIZE }, (_, col) => {
                   const tile = game.board[row][col];
@@ -1274,11 +1274,13 @@ export function GamePrototype() {
                       aria-label={
                         tile
                           ? `${tile.letter}, ${tile.value} поена`
-                          : premium
+                          : isStart
+                            ? "Почетна звезда, без бонуса"
+                            : premium
                             ? PREMIUM_LABELS[premium].replace("\n", " ")
                             : `Поље ${row + 1}, ${col + 1}`
                       }
-                      className={`board-cell ${premium ?? ""} ${tile ? "occupied" : ""} ${tile && lastMoveTileIds.includes(tile.id) ? "last-move" : ""}`}
+                      className={`board-cell ${premium ?? ""} ${isStart ? "start-cell" : ""} ${tile ? "occupied" : ""} ${tile && lastMoveTileIds.includes(tile.id) ? "last-move" : ""}`}
                       data-cell={`${row}-${col}`}
                       key={`${row}-${col}`}
                       disabled={matchComplete || botThinking || (isOnline && !canPlayOnline)}

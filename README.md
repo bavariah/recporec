@@ -7,7 +7,7 @@ authoritative online turn engine remain the next deployment phase.
 
 ## What works now
 
-- 8×8 responsive board with double/triple letter and word squares;
+- 9×9 responsive board with a true centre starting star and double/triple letter and word squares;
 - provisional Serbian Cyrillic 104-tile bag, including two configurable blanks;
 - eight-tile rack with automatic refill, placement, undo, and one non-turn-ending exchange per player per game;
 - first-move, straight-line, gap, connection, and minimum-word validation;

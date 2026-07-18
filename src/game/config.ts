@@ -1,11 +1,11 @@
 import type { PremiumType, SerbianLetter } from "./types";
 
-export const BOARD_SIZE = 8;
+export const BOARD_SIZE = 9;
 export const RACK_SIZE = 8;
 
-// An even board has four visual centre squares. We use the upper-left one as
-// the start square so the opening rule remains deterministic.
-export const START_CELL = { row: 3, col: 3 } as const;
+// A 9x9 board has one true centre square. It marks where the opening word must
+// pass, but deliberately carries no score multiplier.
+export const START_CELL = { row: 4, col: 4 } as const;
 
 export const PREMIUM_LABELS: Record<PremiumType, string> = {
   letter2: "2×\nслово",
@@ -19,19 +19,22 @@ const PREMIUM_ENTRIES: Array<[PremiumType, Array<[number, number]>]> = [
     "word3",
     [
       [0, 0],
-      [0, 7],
-      [7, 0],
-      [7, 7],
+      [0, 8],
+      [8, 0],
+      [8, 8],
     ],
   ],
   [
     "word2",
     [
       [1, 1],
-      [1, 6],
+      [1, 7],
       [3, 3],
-      [6, 1],
-      [6, 6],
+      [3, 5],
+      [5, 3],
+      [5, 5],
+      [7, 1],
+      [7, 7],
     ],
   ],
   [
@@ -39,33 +42,37 @@ const PREMIUM_ENTRIES: Array<[PremiumType, Array<[number, number]>]> = [
     [
       [1, 4],
       [2, 2],
-      [2, 5],
-      [3, 0],
+      [2, 6],
+      [4, 1],
       [4, 7],
-      [5, 2],
-      [5, 5],
-      [6, 3],
+      [6, 2],
+      [6, 6],
+      [7, 4],
     ],
   ],
   [
     "letter2",
     [
       [0, 3],
-      [0, 4],
+      [0, 5],
       [1, 2],
-      [1, 5],
+      [1, 6],
       [2, 1],
-      [2, 6],
-      [3, 1],
-      [3, 6],
-      [4, 1],
-      [4, 6],
-      [5, 1],
-      [5, 6],
-      [6, 2],
-      [6, 5],
-      [7, 3],
-      [7, 4],
+      [2, 7],
+      [3, 0],
+      [3, 4],
+      [3, 8],
+      [4, 3],
+      [4, 5],
+      [5, 0],
+      [5, 4],
+      [5, 8],
+      [6, 1],
+      [6, 7],
+      [7, 2],
+      [7, 6],
+      [8, 3],
+      [8, 5],
     ],
   ],
 ];
