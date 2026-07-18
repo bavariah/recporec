@@ -106,6 +106,48 @@ interface GameMove {
 const MAX_ROUNDS = 5;
 const TURNS_PER_ROUND = 2;
 const MAX_TURNS = MAX_ROUNDS * TURNS_PER_ROUND;
+const WORD_REPORTS_STORAGE_KEY = "skrabaj-word-reports";
+
+type AudioWindow = Window & typeof globalThis & {
+  webkitAudioContext?: typeof AudioContext;
+};
+
+function readQueuedWordReports() {
+  try {
+    return JSON.parse(window.localStorage.getItem(WORD_REPORTS_STORAGE_KEY) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+function writeQueuedWordReports(words: string[]) {
+  window.localStorage.setItem(WORD_REPORTS_STORAGE_KEY, JSON.stringify([...new Set(words)]));
+}
+
+async function playMoveSound(kind: MoveFeedback["kind"]) {
+  const audioWindow = window as AudioWindow;
+  const AudioContextClass = audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  const context = new AudioContextClass();
+  if (context.state === "suspended") await context.resume();
+
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const startsAt = context.currentTime;
+  const duration = kind === "accepted" ? 0.18 : 0.22;
+
+  oscillator.type = kind === "accepted" ? "sine" : "triangle";
+  oscillator.frequency.setValueAtTime(kind === "accepted" ? 610 : 210, startsAt);
+  oscillator.frequency.exponentialRampToValueAtTime(kind === "accepted" ? 880 : 135, startsAt + duration);
+  gain.gain.setValueAtTime(0.001, startsAt);
+  gain.gain.exponentialRampToValueAtTime(kind === "accepted" ? 0.09 : 0.075, startsAt + 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration);
+  oscillator.connect(gain).connect(context.destination);
+  oscillator.start(startsAt);
+  oscillator.stop(startsAt + duration);
+  oscillator.addEventListener("ended", () => void context.close(), { once: true });
+}
 
 function dailySeed() {
   return Number(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Belgrade" }).replaceAll("-", ""));
@@ -314,6 +356,26 @@ export function GamePrototype() {
   }, []);
 
   useEffect(() => {
+    if (!supabase || !userId) return;
+    const queuedWords = readQueuedWordReports();
+    if (queuedWords.length === 0) return;
+    const client = supabase;
+    let active = true;
+
+    void Promise.all(queuedWords.map((word) => client.rpc("report_dictionary_word", {
+      p_word: word,
+      p_match_id: null,
+    }))).then((results) => {
+      if (!active) return;
+      writeQueuedWordReports(queuedWords.filter((_, index) => Boolean(results[index].error)));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  useEffect(() => {
     if (!supabase || !activeMatchId) return;
     const client = supabase;
     let active = true;
@@ -396,19 +458,7 @@ export function GamePrototype() {
     setMoveFeedback({ kind, tileIds, sequence: moveFeedbackSequence.current });
     if (soundEnabled) {
       navigator.vibrate?.(kind === "accepted" ? 24 : [20, 35, 20]);
-      const AudioContextClass = window.AudioContext;
-      if (AudioContextClass) {
-        const context = new AudioContextClass();
-        const oscillator = context.createOscillator();
-        const gain = context.createGain();
-        oscillator.frequency.value = kind === "accepted" ? 660 : 180;
-        gain.gain.setValueAtTime(0.035, context.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.12);
-        oscillator.connect(gain).connect(context.destination);
-        oscillator.start();
-        oscillator.stop(context.currentTime + 0.12);
-        oscillator.addEventListener("ended", () => void context.close(), { once: true });
-      }
+      void playMoveSound(kind);
     }
   }
 
@@ -421,6 +471,7 @@ export function GamePrototype() {
     setSoundEnabled((current) => {
       const next = !current;
       window.localStorage.setItem("skrabaj-sound", next ? "on" : "off");
+      if (next) void playMoveSound("accepted");
       return next;
     });
   }
@@ -553,17 +604,25 @@ export function GamePrototype() {
 
   async function reportRejectedWords() {
     if (lastRejectedWords.length === 0) return;
+    const words = [...new Set(lastRejectedWords.map((word) => word.toLocaleLowerCase("sr-Cyrl")))];
+    let failedWords = words;
+
     if (supabase && userId) {
       const client = supabase;
-      await Promise.all(lastRejectedWords.map((word) => client.rpc("report_dictionary_word", {
+      const results = await Promise.all(words.map((word) => client.rpc("report_dictionary_word", {
         p_word: word,
         p_match_id: isOnline ? onlineState?.match.id ?? null : null,
       })));
-    } else {
-      const saved = JSON.parse(window.localStorage.getItem("skrabaj-word-reports") ?? "[]") as string[];
-      window.localStorage.setItem("skrabaj-word-reports", JSON.stringify([...new Set([...saved, ...lastRejectedWords])]));
+      failedWords = words.filter((_, index) => Boolean(results[index].error));
     }
-    setNotice("Хвала — реч је послата на проверу.");
+
+    if (failedWords.length > 0) {
+      writeQueuedWordReports([...readQueuedWordReports(), ...failedWords]);
+      setNotice("Хвала — реч је сачувана и биће послата на проверу.");
+    } else {
+      writeQueuedWordReports(readQueuedWordReports().filter((word) => !words.includes(word)));
+      setNotice("Хвала — реч је послата на проверу.");
+    }
     setLastRejectedWords([]);
   }
 
@@ -1051,16 +1110,19 @@ export function GamePrototype() {
           <button aria-label="Дневни изазов" className="nav-button nav-button--icon" onClick={startDailyChallenge} title="Дневни изазов" type="button">
             <span aria-hidden="true">☀</span><span className="desktop-label">Данас</span>
           </button>
-          <button aria-label="Правила" className="nav-button nav-button--icon" onClick={() => setOpenModal("rules")} title="Правила" type="button">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 17.2v.1M9.8 9.2a2.3 2.3 0 1 1 3.6 1.9c-.9.6-1.4 1.1-1.4 2.2"/><circle cx="12" cy="12" r="9"/></svg>
-            <span className="desktop-label">Правила</span>
-          </button>
           <button aria-label="Табела" className="nav-button nav-button--icon" onClick={openLeaderboard} title="Табела" type="button">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v1.5A3.5 3.5 0 0 0 8.5 11M16 6h3v1.5a3.5 3.5 0 0 1-3.5 3.5M12 12v4M9 20h6M10 16h4v4"/></svg>
             <span className="desktop-label">Табела</span>
           </button>
-          <button aria-label={soundEnabled ? "Искључи звук" : "Укључи звук"} className="nav-button nav-button--icon" onClick={toggleSound} title={soundEnabled ? "Искључи звук" : "Укључи звук"} type="button">
-            <span aria-hidden="true">{soundEnabled ? "♪" : "×"}</span>
+          <button aria-label="Правила" className="nav-button nav-button--icon" onClick={() => setOpenModal("rules")} title="Правила" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 17.2v.1M9.8 9.2a2.3 2.3 0 1 1 3.6 1.9c-.9.6-1.4 1.1-1.4 2.2"/><circle cx="12" cy="12" r="9"/></svg>
+            <span className="desktop-label">Правила</span>
+          </button>
+          <button aria-label={soundEnabled ? "Искључи звук" : "Укључи звук"} className="nav-button nav-button--icon nav-button--sound" onClick={toggleSound} title={soundEnabled ? "Искључи звук" : "Укључи звук"} type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M5 10v4h3l4 3V7l-4 3H5Z" />
+              {soundEnabled ? <><path d="M15 9.5a4 4 0 0 1 0 5" /><path d="M17.5 7a7 7 0 0 1 0 10" /></> : <path d="m15 10 5 5m0-5-5 5" />}
+            </svg>
           </button>
         </div>
       </header>
@@ -1193,7 +1255,15 @@ export function GamePrototype() {
               <span><small>ТВОЈА СЛОВА</small><strong>Слова</strong></span>
               <span className="rack-heading__tools">
                 <button disabled={pendingCount > 0 || exchangeMode} onClick={shuffleRack} type="button">Промешај</button>
-                <button disabled={pendingCount > 0 || exchangeMode} onClick={sortRack} type="button">Сложи</button>
+                <button disabled={pendingCount > 0 || exchangeMode} onClick={sortRack} type="button">Поређај</button>
+                <button
+                  className="rack-exchange-action"
+                  disabled={!exchangeMode && !exchangeAvailable}
+                  onClick={exchangeMode ? cancelExchange : beginExchange}
+                  type="button"
+                >
+                  {exchangeMode ? "Одустани" : "Замени слова"}
+                </button>
                 <span className="bag-count">У врећици <b>{bagCount}</b></span>
               </span>
             </div>
@@ -1262,17 +1332,9 @@ export function GamePrototype() {
           )}
 
           <div className="turn-utilities">
-            {exchangeMode ? (
-              <button className="secondary-action" onClick={cancelExchange} type="button">
-                Одустани од замене
-              </button>
-            ) : pendingCount > 0 ? (
+            {!exchangeMode && pendingCount > 0 ? (
               <button className="secondary-action" onClick={returnPendingTiles} type="button">
                 Поништи слова
-              </button>
-            ) : exchangeAvailable ? (
-              <button className="secondary-action exchange-action" onClick={beginExchange} type="button">
-                Замени слова
               </button>
             ) : null}
             {!exchangeMode && isOnline && onlineState?.match.status === "active" && (

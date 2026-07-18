@@ -226,6 +226,12 @@ button {
   stroke-width: 1.8;
 }
 
+.nav-button--sound svg {
+  width: 23px;
+  height: 23px;
+  stroke-width: 1.9;
+}
+
 .icon-button {
   display: inline-flex;
   gap: 6px;
@@ -827,13 +833,29 @@ button {
 .rack-heading__tools > button {
   min-height: 30px;
   padding: 0 9px;
-  color: #51645b;
-  background: #fffdf8;
-  border: 1px solid var(--line);
+  color: var(--ink);
+  background: #f5f1e8;
+  border: 1px solid #c4bcad;
   border-radius: 7px;
   cursor: pointer;
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 900;
+}
+
+.rack-heading__tools > button:hover {
+  background: #ebe5d9;
+  border-color: #9e9586;
+}
+
+.rack-heading__tools > .rack-exchange-action {
+  color: #fff;
+  background: var(--forest);
+  border-color: var(--forest);
+}
+
+.rack-heading__tools > .rack-exchange-action:hover {
+  background: var(--forest-light);
+  border-color: var(--forest-light);
 }
 
 .rack-heading__tools > button:disabled {
@@ -2077,8 +2099,13 @@ button {
 
   .rack-heading__tools > button {
     min-height: 28px;
-    padding-inline: 7px;
-    font-size: 8px;
+    padding-inline: 6px;
+    font-size: 8.5px;
+  }
+
+  .nav-button--sound svg {
+    width: 24px;
+    height: 24px;
   }
 
   .bag-count {

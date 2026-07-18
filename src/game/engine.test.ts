@@ -22,6 +22,19 @@ test("a disconnected later move is rejected", () => {
   assert.equal(evaluateMove(board).valid, false);
 });
 
+test("one new letter can extend an existing word", () => {
+  const board = createEmptyBoard();
+  board[3][2] = { id: "r", letter: "Р", value: 1, isBlank: false, committed: true };
+  board[3][3] = { id: "a", letter: "А", value: 1, isBlank: false, committed: true };
+  board[3][4] = { id: "d", letter: "Д", value: 1, isBlank: false, committed: true };
+  board[3][5] = { id: "i", letter: "И", value: 1, isBlank: false, committed: false };
+
+  const result = evaluateMove(board);
+  assert.equal(result.valid, true);
+  assert.equal(result.words.length, 1);
+  assert.equal(result.words[0].word, "РАДИ");
+});
+
 test("the solo bot builds a dictionary-approved opening from its rack", () => {
   const move = findBotMove(
     createEmptyBoard(),
