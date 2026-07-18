@@ -1095,6 +1095,24 @@ button {
   line-height: 1.5;
 }
 
+.word-preview > .word-check {
+  margin-top: 8px;
+  font-weight: 900;
+}
+
+.word-preview > .word-check--checking,
+.word-preview > .word-check--idle {
+  color: #7b7367;
+}
+
+.word-preview > .word-check--accepted {
+  color: #247b5c;
+}
+
+.word-preview > .word-check--rejected {
+  color: #a43b32;
+}
+
 .move-history {
   display: grid;
   max-height: 210px;

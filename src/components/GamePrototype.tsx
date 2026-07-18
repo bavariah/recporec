@@ -35,6 +35,11 @@ interface DictionaryCheckResult {
   accepted: boolean;
 }
 
+interface PendingWordCheck {
+  key: string;
+  status: "idle" | "checking" | "accepted" | "rejected";
+}
+
 interface GameState {
   board: Board;
   bag: RackTile[];
@@ -225,6 +230,7 @@ export function GamePrototype() {
   const [localMode, setLocalMode] = useState<"practice" | "daily" | "bot">("practice");
   const [dailyBest, setDailyBest] = useState(0);
   const [lastRejectedWords, setLastRejectedWords] = useState<string[]>([]);
+  const [pendingWordCheck, setPendingWordCheck] = useState<PendingWordCheck>({ key: "", status: "idle" });
   const [botRack, setBotRack] = useState<RackTile[]>([]);
   const [botScore, setBotScore] = useState(0);
   const [botThinking, setBotThinking] = useState(false);
@@ -415,10 +421,66 @@ export function GamePrototype() {
 
   const selectedTile = game.rack.find((tile) => tile.id === selectedTileId) ?? null;
   const evaluation = useMemo(() => evaluateMove(game.board), [game.board]);
+  const pendingWordKey = evaluation.valid
+    ? evaluation.words.map(({ word }) => word.toLocaleLowerCase("sr-Cyrl")).join("|")
+    : "";
   const pendingCount = useMemo(
     () => getPendingPositions(game.board).length,
     [game.board],
   );
+  const pendingWordStatus = !evaluation.valid || !pendingWordKey
+    ? "idle"
+    : pendingWordCheck.key === pendingWordKey
+      ? pendingWordCheck.status
+      : "checking";
+  const pendingMoveAccepted = Boolean(
+    evaluation.valid && pendingWordStatus === "accepted",
+  );
+  const pendingMoveRejected = Boolean(evaluation.valid && pendingWordStatus === "rejected");
+
+  useEffect(() => {
+    let active = true;
+    if (!pendingWordKey) return;
+
+    const words = pendingWordKey.split("|");
+
+    async function checkPendingWords() {
+      if (supabase) {
+        const { data, error } = await supabase.rpc("check_dictionary_words", { p_words: words });
+        if (!error) {
+          const acceptedWords = new Set(
+            ((data ?? []) as DictionaryCheckResult[])
+              .filter(({ accepted }) => accepted)
+              .map(({ word }) => word),
+          );
+          if (active) {
+            setPendingWordCheck({
+              key: pendingWordKey,
+              status: words.every((word) => acceptedWords.has(word)) ? "accepted" : "rejected",
+            });
+          }
+          return;
+        }
+      }
+
+      try {
+        const rejected = await checkLocalWords(words);
+        if (active) {
+          setPendingWordCheck({
+            key: pendingWordKey,
+            status: rejected.length === 0 ? "accepted" : "rejected",
+          });
+        }
+      } catch {
+        if (active) setPendingWordCheck({ key: pendingWordKey, status: "idle" });
+      }
+    }
+
+    void checkPendingWords();
+    return () => {
+      active = false;
+    };
+  }, [pendingWordKey]);
   const lastMoveTileIds = moveHistory.at(-1)?.tileIds ?? [];
   const viewer = onlineState?.players.find((player) => player.user_id === userId) ?? null;
   const opponent = onlineState?.players.find((player) => player.user_id !== userId) ?? null;
@@ -1228,7 +1290,7 @@ export function GamePrototype() {
                     >
                       {tile ? (
                         <span
-                          className={`letter-tile board-tile ${tile.committed ? "committed" : evaluation.valid ? "pending pending-valid" : "pending"} ${tile.isBlank ? "blank" : ""} ${feedbackClass}`}
+                          className={`letter-tile board-tile ${tile.committed ? "committed" : pendingMoveAccepted ? "pending pending-valid" : "pending"} ${tile.isBlank ? "blank" : ""} ${feedbackClass}`}
                           key={`${tile.id}-${feedbackIndex >= 0 ? moveFeedback?.sequence : "idle"}`}
                           style={feedbackStyle}
                         >
@@ -1295,8 +1357,8 @@ export function GamePrototype() {
         </div>
 
         <aside className="turn-panel">
-          <div className={`notice ${moveFeedback?.kind === "rejected" ? "notice-rejected" : moveFeedback?.kind === "accepted" || evaluation.valid ? "notice-valid" : ""}`} aria-live="polite">
-            <span aria-hidden="true">{moveFeedback?.kind === "rejected" ? "×" : moveFeedback?.kind === "accepted" || evaluation.valid ? "✓" : "i"}</span>
+          <div className={`notice ${moveFeedback?.kind === "rejected" || pendingMoveRejected ? "notice-rejected" : moveFeedback?.kind === "accepted" || pendingMoveAccepted ? "notice-valid" : ""}`} aria-live="polite">
+            <span aria-hidden="true">{moveFeedback?.kind === "rejected" || pendingMoveRejected ? "×" : moveFeedback?.kind === "accepted" || pendingMoveAccepted ? "✓" : "i"}</span>
             <p>{notice}</p>
           </div>
           {lastRejectedWords.length > 0 && (
@@ -1312,6 +1374,17 @@ export function GamePrototype() {
               </div>
             ))}
             {evaluation.words.length > 1 && <p>Сва укрштања се сабирају у укупан резултат.</p>}
+            {evaluation.valid && (
+              <p className={`word-check word-check--${pendingWordStatus}`}>
+                {pendingWordStatus === "checking"
+                  ? "Провера речника…"
+                  : pendingWordStatus === "accepted"
+                    ? "Речник прихвата потез."
+                    : pendingWordStatus === "rejected"
+                      ? "Речник не прихвата потез."
+                      : "Провера речника није доступна."}
+              </p>
+            )}
           </div>
 
           {selectedTile?.letter === null && (
