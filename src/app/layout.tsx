@@ -16,6 +16,8 @@ const robotoSlab = Roboto_Slab({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://recporec.vercel.app"),
+  alternates: { canonical: "/" },
   title: "Шкрабај — српска игра речи",
   description:
     "Брза стратешка игра речи на српском језику, направљена за прегледач.",
