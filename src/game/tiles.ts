@@ -6,6 +6,12 @@ interface TileDefinition {
   value: number;
 }
 
+export const SERBIAN_VOWELS = new Set<SerbianLetter>(["А", "Е", "И", "О", "У"]);
+
+export function isSerbianVowel(tile: RackTile) {
+  return tile.letter !== null && SERBIAN_VOWELS.has(tile.letter);
+}
+
 // Published Serbian distribution. Its listed counts total 104 tiles, including
 // two blanks; keep this configurable until the final game balance is approved.
 export const TILE_DEFINITIONS: TileDefinition[] = [
@@ -74,5 +80,42 @@ export function drawTiles(
   return {
     drawn: bag.slice(0, count),
     bag: bag.slice(count),
+  };
+}
+
+export function drawTilesForRack(
+  bag: RackTile[],
+  amount: number,
+  rack: RackTile[],
+): { drawn: RackTile[]; bag: RackTile[] } {
+  const count = Math.min(Math.max(0, amount), bag.length);
+  const drawn = bag.slice(0, count);
+  const existingVowels = rack.filter(isSerbianVowel).length;
+  const minimumDrawVowels = Math.min(count, Math.max(0, 2 - existingVowels));
+  const maximumDrawVowels = Math.max(0, 4 - existingVowels);
+  let drawnVowels = drawn.filter(isSerbianVowel).length;
+
+  if (drawnVowels < minimumDrawVowels) {
+    const replacements = bag.slice(count).filter(isSerbianVowel);
+    while (drawnVowels < minimumDrawVowels && replacements.length > 0) {
+      const replaceIndex = drawn.findLastIndex((tile) => !isSerbianVowel(tile));
+      if (replaceIndex < 0) break;
+      drawn[replaceIndex] = replacements.shift()!;
+      drawnVowels += 1;
+    }
+  } else if (drawnVowels > maximumDrawVowels) {
+    const replacements = bag.slice(count).filter((tile) => !isSerbianVowel(tile));
+    while (drawnVowels > maximumDrawVowels && replacements.length > 0) {
+      const replaceIndex = drawn.findLastIndex(isSerbianVowel);
+      if (replaceIndex < 0) break;
+      drawn[replaceIndex] = replacements.shift()!;
+      drawnVowels -= 1;
+    }
+  }
+
+  const drawnIds = new Set(drawn.map((tile) => tile.id));
+  return {
+    drawn,
+    bag: bag.filter((tile) => !drawnIds.has(tile.id)),
   };
 }

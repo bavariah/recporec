@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:dictionary": "node --test scripts/dictionary-lib.test.mjs",
-    "test:game": "tsx --test src/game/engine.test.ts",
+    "test:game": "tsx --test src/game/engine.test.ts src/game/tiles.test.ts",
     "test": "npm run test:dictionary && npm run test:game",
     "dictionary:extract-pdf": "python scripts/extract_dictionary_headwords.py",
     "dictionary:import-cik": "node scripts/import-cik-pogodi.mjs",

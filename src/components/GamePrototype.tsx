@@ -18,7 +18,7 @@ import {
   evaluateMove,
   getPendingPositions,
 } from "@/game/engine";
-import { createTileBag, drawTiles, shuffleTiles } from "@/game/tiles";
+import { createTileBag, drawTilesForRack, shuffleTiles } from "@/game/tiles";
 import { findBotMove } from "@/game/bot";
 import type { Board, RackTile, SerbianLetter } from "@/game/types";
 import { supabase } from "@/lib/supabase/client";
@@ -163,7 +163,7 @@ function seededRandom(seed: number) {
 
 function buildNewGame(random: () => number = Math.random): GameState {
   const shuffledBag = shuffleTiles(createTileBag(), random);
-  const firstDraw = drawTiles(shuffledBag, RACK_SIZE);
+  const firstDraw = drawTilesForRack(shuffledBag, RACK_SIZE, []);
 
   return {
     board: createEmptyBoard(),
@@ -177,8 +177,8 @@ function buildNewGame(random: () => number = Math.random): GameState {
 
 function buildBotGame(random: () => number = Math.random) {
   const shuffledBag = shuffleTiles(createTileBag(), random);
-  const playerDraw = drawTiles(shuffledBag, RACK_SIZE);
-  const botDraw = drawTiles(playerDraw.bag, RACK_SIZE);
+  const playerDraw = drawTilesForRack(shuffledBag, RACK_SIZE, []);
+  const botDraw = drawTilesForRack(playerDraw.bag, RACK_SIZE, []);
   return {
     botRack: botDraw.drawn,
     game: {
@@ -578,7 +578,7 @@ export function GamePrototype() {
       return;
     }
     const remainingRack = botRack.filter((tile) => !move.usedTileIds.includes(tile.id));
-    const refill = drawTiles(stateAfterPlayer.bag, RACK_SIZE - remainingRack.length);
+    const refill = drawTilesForRack(stateAfterPlayer.bag, RACK_SIZE - remainingRack.length, remainingRack);
     const next = {
       ...stateAfterPlayer,
       bag: refill.bag,
@@ -750,7 +750,8 @@ export function GamePrototype() {
 
     const selected = new Set(exchangeTileIds);
     const returnedTiles = game.rack.filter((tile) => selected.has(tile.id));
-    const replacement = drawTiles(game.bag, returnedTiles.length);
+    const remainingRack = game.rack.filter((tile) => !selected.has(tile.id));
+    const replacement = drawTilesForRack(game.bag, returnedTiles.length, remainingRack);
     if (replacement.drawn.length !== returnedTiles.length) {
       setSubmitting(false);
       setNotice("У врећици нема довољно слова за замену.");
@@ -762,7 +763,7 @@ export function GamePrototype() {
       bag: [...replacement.bag, ...returnedTiles],
       exchangeUsed: true,
       rack: [
-        ...current.rack.filter((tile) => !selected.has(tile.id)),
+        ...remainingRack,
         ...replacement.drawn,
       ],
     }));
@@ -1049,7 +1050,7 @@ export function GamePrototype() {
       }
     }
 
-    const refill = drawTiles(game.bag, RACK_SIZE - game.rack.length);
+    const refill = drawTilesForRack(game.bag, RACK_SIZE - game.rack.length, game.rack);
     const nextGame: GameState = {
       ...game,
       board: commitMove(game.board),
@@ -1227,7 +1228,7 @@ export function GamePrototype() {
                     >
                       {tile ? (
                         <span
-                          className={`letter-tile board-tile ${tile.committed ? "committed" : "pending"} ${tile.isBlank ? "blank" : ""} ${feedbackClass}`}
+                          className={`letter-tile board-tile ${tile.committed ? "committed" : evaluation.valid ? "pending pending-valid" : "pending"} ${tile.isBlank ? "blank" : ""} ${feedbackClass}`}
                           key={`${tile.id}-${feedbackIndex >= 0 ? moveFeedback?.sequence : "idle"}`}
                           style={feedbackStyle}
                         >

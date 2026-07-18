@@ -743,6 +743,11 @@ button {
   animation: tile-in 180ms ease-out;
 }
 
+.board-tile.pending-valid {
+  outline-color: #2c9a70;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.82), inset -3px -4px 0 rgba(171, 117, 34, 0.19), 0 3px 0 #a97831, 0 0 0 3px rgba(44, 154, 112, 0.24), 0 7px 13px rgba(20, 55, 54, 0.3);
+}
+
 .board-tile.committed {
   background: linear-gradient(145deg, #fff8e7, #efd292 55%, #dfb961);
 }
@@ -782,7 +787,7 @@ button {
   54% {
     opacity: 1;
     transform: translateY(0) scale(0.9);
-    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.82), inset -3px -4px 0 rgba(171, 117, 34, 0.19), 0 1px 0 #8c5c20, 0 0 0 5px rgba(255, 198, 66, 0.3);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.82), inset -3px -4px 0 rgba(171, 117, 34, 0.19), 0 1px 0 #8c5c20, 0 0 0 5px rgba(44, 154, 112, 0.32);
   }
   72% {
     transform: translateY(-10%) scale(1.04);
