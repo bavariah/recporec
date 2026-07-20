@@ -29,10 +29,6 @@ const PREMIUM_ENTRIES: Array<[PremiumType, Array<[number, number]>]> = [
     [
       [1, 1],
       [1, 7],
-      [3, 3],
-      [3, 5],
-      [5, 3],
-      [5, 5],
       [7, 1],
       [7, 7],
     ],

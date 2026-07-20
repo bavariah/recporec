@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   BOARD_SIZE,
   getPremium,
@@ -20,7 +21,8 @@ import {
 } from "@/game/engine";
 import { createTileBag, drawTilesForRack, shuffleTiles } from "@/game/tiles";
 import { findBotMove } from "@/game/bot";
-import type { Board, RackTile, SerbianLetter } from "@/game/types";
+import { sanitizeDraftPositions } from "@/game/draft";
+import type { Board, BoardPosition, RackTile, SerbianLetter } from "@/game/types";
 import { supabase } from "@/lib/supabase/client";
 import { LeaderboardModal, type LeaderboardEntry } from "@/components/LeaderboardModal";
 import { GameResultModal, type GameResultKind } from "@/components/GameResultModal";
@@ -129,7 +131,9 @@ function writeQueuedWordReports(words: string[]) {
   window.localStorage.setItem(WORD_REPORTS_STORAGE_KEY, JSON.stringify([...new Set(words)]));
 }
 
-async function playMoveSound(kind: MoveFeedback["kind"]) {
+type GameSoundKind = MoveFeedback["kind"] | "placed";
+
+async function playGameSound(kind: GameSoundKind) {
   const audioWindow = window as AudioWindow;
   const AudioContextClass = audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
   if (!AudioContextClass) return;
@@ -137,21 +141,41 @@ async function playMoveSound(kind: MoveFeedback["kind"]) {
   const context = new AudioContextClass();
   if (context.state === "suspended") await context.resume();
 
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
   const startsAt = context.currentTime;
-  const duration = kind === "accepted" ? 0.18 : 0.22;
+  const patterns = {
+    placed: [
+      { frequency: 360, offset: 0, duration: 0.055, volume: 0.05, type: "sine" as OscillatorType },
+      { frequency: 510, offset: 0.028, duration: 0.045, volume: 0.035, type: "sine" as OscillatorType },
+    ],
+    accepted: [
+      { frequency: 520, offset: 0, duration: 0.09, volume: 0.075, type: "sine" as OscillatorType },
+      { frequency: 690, offset: 0.07, duration: 0.1, volume: 0.08, type: "sine" as OscillatorType },
+      { frequency: 920, offset: 0.15, duration: 0.13, volume: 0.085, type: "sine" as OscillatorType },
+    ],
+    rejected: [
+      { frequency: 235, offset: 0, duration: 0.13, volume: 0.08, type: "triangle" as OscillatorType },
+      { frequency: 155, offset: 0.095, duration: 0.17, volume: 0.075, type: "triangle" as OscillatorType },
+    ],
+  } satisfies Record<GameSoundKind, Array<{ frequency: number; offset: number; duration: number; volume: number; type: OscillatorType }>>;
 
-  oscillator.type = kind === "accepted" ? "sine" : "triangle";
-  oscillator.frequency.setValueAtTime(kind === "accepted" ? 610 : 210, startsAt);
-  oscillator.frequency.exponentialRampToValueAtTime(kind === "accepted" ? 880 : 135, startsAt + duration);
-  gain.gain.setValueAtTime(0.001, startsAt);
-  gain.gain.exponentialRampToValueAtTime(kind === "accepted" ? 0.09 : 0.075, startsAt + 0.025);
-  gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration);
-  oscillator.connect(gain).connect(context.destination);
-  oscillator.start(startsAt);
-  oscillator.stop(startsAt + duration);
-  oscillator.addEventListener("ended", () => void context.close(), { once: true });
+  let lastStop = startsAt;
+  for (const note of patterns[kind]) {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const noteStart = startsAt + note.offset;
+    const noteStop = noteStart + note.duration;
+    oscillator.type = note.type;
+    oscillator.frequency.setValueAtTime(note.frequency, noteStart);
+    gain.gain.setValueAtTime(0.001, noteStart);
+    gain.gain.exponentialRampToValueAtTime(note.volume, noteStart + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, noteStop);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start(noteStart);
+    oscillator.stop(noteStop);
+    lastStop = Math.max(lastStop, noteStop);
+  }
+
+  window.setTimeout(() => void context.close(), Math.ceil((lastStop - startsAt + 0.05) * 1000));
 }
 
 function dailySeed() {
@@ -235,7 +259,11 @@ export function GamePrototype() {
   const [botScore, setBotScore] = useState(0);
   const [botThinking, setBotThinking] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [rivalDraftPositions, setRivalDraftPositions] = useState<BoardPosition[]>([]);
+  const [draftChannelReady, setDraftChannelReady] = useState(false);
   const moveFeedbackSequence = useRef(0);
+  const draftChannelRef = useRef<RealtimeChannel | null>(null);
+  const rivalDraftTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     void loadLocalDictionary().catch(() => undefined);
@@ -285,7 +313,12 @@ export function GamePrototype() {
       turn: move.turn,
       words: move.words.map((word) => ({ score: 0, word })),
     })));
-    window.localStorage.setItem("skrabaj-active-match", nextState.match.id);
+    if (nextState.match.status === "waiting" || nextState.match.status === "active") {
+      window.localStorage.setItem("skrabaj-active-match", nextState.match.id);
+    } else {
+      window.localStorage.removeItem("skrabaj-active-match");
+    }
+    setRivalDraftPositions([]);
     if (nextState.match.status !== "waiting") setOnlineModalOpen(false);
 
     if (nextState.match.status === "waiting") {
@@ -350,8 +383,14 @@ export function GamePrototype() {
         const savedMatchId = window.localStorage.getItem("skrabaj-active-match");
         const { data: openMatches } = await supabase.rpc("list_my_open_matches");
         const matches = (openMatches ?? []) as OpenMatch[];
-        const resumable = matches.find((match) => match.match_id === savedMatchId) ?? matches[0];
-        if (active && resumable?.match_id) setActiveMatchId(resumable.match_id);
+        const resumable = savedMatchId
+          ? matches.find((match) => match.match_id === savedMatchId)
+          : null;
+        if (active && resumable?.match_id) {
+          setActiveMatchId(resumable.match_id);
+        } else if (savedMatchId) {
+          window.localStorage.removeItem("skrabaj-active-match");
+        }
       }
     }
 
@@ -400,7 +439,19 @@ export function GamePrototype() {
 
     void refreshMatch();
     const channel = client
-      .channel(`match-ui-${activeMatchId}`)
+      .channel(`match-ui-${activeMatchId}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "draft-placement" }, ({ payload }) => {
+        const draft = payload as { playerId?: unknown; positions?: unknown };
+        if (draft.playerId === userId) return;
+        const positions = sanitizeDraftPositions(draft.positions);
+        setRivalDraftPositions(positions);
+        if (rivalDraftTimeoutRef.current !== null) {
+          window.clearTimeout(rivalDraftTimeoutRef.current);
+        }
+        rivalDraftTimeoutRef.current = positions.length
+          ? window.setTimeout(() => setRivalDraftPositions([]), 12_000)
+          : null;
+      })
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "matches", filter: `id=eq.${activeMatchId}` },
@@ -411,22 +462,32 @@ export function GamePrototype() {
         { event: "UPDATE", schema: "public", table: "match_players", filter: `match_id=eq.${activeMatchId}` },
         () => void refreshMatch(),
       )
-      .subscribe();
+      .subscribe((status) => setDraftChannelReady(status === "SUBSCRIBED"));
+    draftChannelRef.current = channel;
 
     return () => {
       active = false;
+      if (rivalDraftTimeoutRef.current !== null) {
+        window.clearTimeout(rivalDraftTimeoutRef.current);
+        rivalDraftTimeoutRef.current = null;
+      }
+      draftChannelRef.current = null;
+      setDraftChannelReady(false);
+      setRivalDraftPositions([]);
       void client.removeChannel(channel);
     };
-  }, [activeMatchId, applyOnlineMatchState]);
+  }, [activeMatchId, applyOnlineMatchState, userId]);
 
   const selectedTile = game.rack.find((tile) => tile.id === selectedTileId) ?? null;
   const evaluation = useMemo(() => evaluateMove(game.board), [game.board]);
   const pendingWordKey = evaluation.valid
     ? evaluation.words.map(({ word }) => word.toLocaleLowerCase("sr-Cyrl")).join("|")
     : "";
-  const pendingCount = useMemo(
-    () => getPendingPositions(game.board).length,
-    [game.board],
+  const pendingPositions = useMemo(() => getPendingPositions(game.board), [game.board]);
+  const pendingCount = pendingPositions.length;
+  const rivalDraftCells = useMemo(
+    () => new Set(rivalDraftPositions.map(({ row, col }) => `${row}-${col}`)),
+    [rivalDraftPositions],
   );
   const pendingWordStatus = !evaluation.valid || !pendingWordKey
     ? "idle"
@@ -488,6 +549,20 @@ export function GamePrototype() {
   const canPlayOnline = Boolean(
     isOnline && onlineState?.match.status === "active" && onlineState.match.current_player_id === userId,
   );
+
+  useEffect(() => {
+    if (!isOnline || !canPlayOnline || !userId || !draftChannelReady) return;
+    const channel = draftChannelRef.current;
+    if (!channel) return;
+    void channel.send({
+      type: "broadcast",
+      event: "draft-placement",
+      payload: {
+        playerId: userId,
+        positions: pendingPositions.map(({ row, col }) => ({ row, col })),
+      },
+    });
+  }, [canPlayOnline, draftChannelReady, isOnline, pendingPositions, userId]);
   const matchComplete = isOnline
     ? onlineState?.match.status === "completed" || onlineState?.match.status === "abandoned"
     : game.turn > (localMode === "bot" ? MAX_TURNS : MAX_ROUNDS);
@@ -515,13 +590,22 @@ export function GamePrototype() {
     : "summary";
 
   function triggerMoveFeedback(kind: MoveFeedback["kind"], tileIds: string[]) {
-    if (tileIds.length === 0) return;
-    moveFeedbackSequence.current += 1;
-    setMoveFeedback({ kind, tileIds, sequence: moveFeedbackSequence.current });
+    if (tileIds.length > 0) {
+      moveFeedbackSequence.current += 1;
+      setMoveFeedback({ kind, tileIds, sequence: moveFeedbackSequence.current });
+    }
     if (soundEnabled) {
       navigator.vibrate?.(kind === "accepted" ? 24 : [20, 35, 20]);
-      void playMoveSound(kind);
+      void playGameSound(kind);
     }
+  }
+
+  function closeResultModal() {
+    if (isOnline && matchComplete) {
+      startNewGame();
+      return;
+    }
+    setResultModalOpen(false);
   }
 
   function closeTutorial() {
@@ -533,7 +617,7 @@ export function GamePrototype() {
     setSoundEnabled((current) => {
       const next = !current;
       window.localStorage.setItem("skrabaj-sound", next ? "on" : "off");
-      if (next) void playMoveSound("accepted");
+      if (next) void playGameSound("accepted");
       return next;
     });
   }
@@ -585,6 +669,7 @@ export function GamePrototype() {
     setBotRack([]);
     setBotScore(0);
     setBotThinking(false);
+    setRivalDraftPositions([]);
     setGame(buildNewGame());
     resetSelection();
     setNotice("Нова партија је спремна. Прва реч иде преко звезде.");
@@ -982,6 +1067,10 @@ export function GamePrototype() {
       board: nextBoard,
       rack: current.rack.filter((tile) => tile.id !== selectedTile.id),
     }));
+    if (soundEnabled) {
+      navigator.vibrate?.(8);
+      void playGameSound("placed");
+    }
     if (!isOnline && game.turn >= MAX_ROUNDS) setResultModalOpen(true);
     resetSelection();
     setNotice(`Постављено: ${letter}.`);
@@ -1195,7 +1284,7 @@ export function GamePrototype() {
           <p className="eyebrow">ТЕМЕЉ ИГРЕ · ВЕРЗИЈА 0.1</p>
           <h1>Освоји таблу.<br />Слово по слово.</h1>
           <p className="intro-copy">
-            Брза партија на 8×8 табли, направљена за српски језик и игру у
+            Брза партија на 9×9 табли, направљена за српски језик и игру у
             прегледачу. Ова верзија већ рачуна потезе, укрштања и бонус поља.
           </p>
         </div>
@@ -1207,7 +1296,7 @@ export function GamePrototype() {
         </div>
       </section>
 
-      {onlineState && (
+      {onlineState && (onlineState.match.status === "waiting" || onlineState.match.status === "active") && (
         <section className={`match-banner match-banner--${onlineState.match.status}`}>
           <span>
             <small>{onlineState.match.status === "waiting" ? "ЧЕКАМО РИВАЛА" : "ОНЛАЈН ПАРТИЈА"}</small>
@@ -1216,9 +1305,7 @@ export function GamePrototype() {
           <p>
             {onlineState.match.status === "waiting"
               ? "Пошаљи код другом играчу."
-              : onlineState.match.status === "completed" || onlineState.match.status === "abandoned"
-                ? "Партија је завршена."
-                : canPlayOnline ? "Твој потез" : "Ривал је на потезу"}
+              : canPlayOnline ? "Твој потез" : "Ривал је на потезу"}
           </p>
           <div className="match-banner__actions">
             {onlineState.match.status === "active" && <button onClick={resignOnlineMatch} type="button">Предај</button>}
@@ -1263,6 +1350,7 @@ export function GamePrototype() {
                   const tile = game.board[row][col];
                   const premium = getPremium(row, col);
                   const isStart = row === START_CELL.row && col === START_CELL.col;
+                  const isRivalDraft = isOnline && !tile && rivalDraftCells.has(`${row}-${col}`);
                   const feedbackIndex = tile ? (moveFeedback?.tileIds.indexOf(tile.id) ?? -1) : -1;
                   const feedbackClass = feedbackIndex >= 0 ? moveFeedback?.kind ?? "" : "";
                   const feedbackStyle = feedbackIndex >= 0
@@ -1274,13 +1362,15 @@ export function GamePrototype() {
                       aria-label={
                         tile
                           ? `${tile.letter}, ${tile.value} поена`
+                          : isRivalDraft
+                            ? "Ривал поставља плочицу на ово поље"
                           : isStart
                             ? "Почетна звезда, без бонуса"
                             : premium
                             ? PREMIUM_LABELS[premium].replace("\n", " ")
                             : `Поље ${row + 1}, ${col + 1}`
                       }
-                      className={`board-cell ${premium ?? ""} ${isStart ? "start-cell" : ""} ${tile ? "occupied" : ""} ${tile && lastMoveTileIds.includes(tile.id) ? "last-move" : ""}`}
+                      className={`board-cell ${premium ?? ""} ${isStart ? "start-cell" : ""} ${isRivalDraft ? "rival-draft" : ""} ${tile ? "occupied" : ""} ${tile && lastMoveTileIds.includes(tile.id) ? "last-move" : ""}`}
                       data-cell={`${row}-${col}`}
                       key={`${row}-${col}`}
                       disabled={matchComplete || botThinking || (isOnline && !canPlayOnline)}
@@ -1298,6 +1388,10 @@ export function GamePrototype() {
                         >
                           <strong>{tile.letter}</strong>
                           <small>{tile.value}</small>
+                        </span>
+                      ) : isRivalDraft ? (
+                        <span className="rival-draft-tile" aria-hidden="true">
+                          <i /><i /><i />
                         </span>
                       ) : (
                         <span className="premium-label">
@@ -1495,7 +1589,7 @@ export function GamePrototype() {
         <GameResultModal
           actionLabel={isOnline ? "РЕВАНШ" : "НОВА ПАРТИЈА"}
           kind={resultKind}
-          onClose={() => setResultModalOpen(false)}
+          onClose={closeResultModal}
           onNewGame={isOnline ? rematchOnline : localMode === "bot" ? startBotGame : localMode === "daily" ? startDailyChallenge : startNewGame}
           onOpenLeaderboard={() => {
             setResultModalOpen(false);

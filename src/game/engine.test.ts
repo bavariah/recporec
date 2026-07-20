@@ -10,6 +10,10 @@ test("the board is 9x9 with a bonus-free star at its true centre", () => {
   assert.ok(board.every((row) => row.length === BOARD_SIZE));
   assert.deepEqual(START_CELL, { row: 4, col: 4 });
   assert.equal(getPremium(START_CELL.row, START_CELL.col), null);
+  assert.equal(getPremium(3, 3), null);
+  assert.equal(getPremium(3, 5), null);
+  assert.equal(getPremium(5, 3), null);
+  assert.equal(getPremium(5, 5), null);
 
   board[4][4] = { id: "n", letter: "Н", value: 1, isBlank: false, committed: false };
   board[4][5] = { id: "e", letter: "Е", value: 1, isBlank: false, committed: false };

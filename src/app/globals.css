@@ -797,6 +797,40 @@ button {
   border-radius: clamp(4px, 0.8vw, 9px);
 }
 
+.rival-draft-tile {
+  position: absolute;
+  z-index: 2;
+  inset: clamp(3px, 0.5vw, 5px);
+  display: flex;
+  gap: clamp(2px, 0.35vw, 4px);
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(77, 174, 185, 0.92), rgba(20, 88, 126, 0.96));
+  border: 1px solid rgba(8, 52, 87, 0.7);
+  border-radius: clamp(4px, 0.8vw, 9px);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28), inset 0 -4px 7px rgba(4, 34, 67, 0.28), 0 0 0 2px rgba(53, 214, 223, 0.2);
+  animation: rival-draft-pulse 1.25s ease-in-out infinite;
+}
+
+.rival-draft-tile::before {
+  position: absolute;
+  inset: 1px 10% 52% 3%;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.34), transparent 76%);
+  border-radius: inherit;
+  content: "";
+}
+
+.rival-draft-tile i {
+  position: relative;
+  z-index: 1;
+  width: clamp(3px, 0.55vw, 6px);
+  height: clamp(3px, 0.55vw, 6px);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(4, 31, 63, 0.25);
+}
+
 .board-tile.pending {
   outline: 3px solid #ff6338;
   outline-offset: -3px;
@@ -837,6 +871,11 @@ button {
 @keyframes tile-in {
   from { transform: translateY(-8px) scale(0.92); opacity: 0.4; }
   to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes rival-draft-pulse {
+  0%, 100% { opacity: 0.68; transform: scale(0.94); }
+  50% { opacity: 0.96; transform: scale(1); }
 }
 
 @keyframes tile-accepted-drop {
