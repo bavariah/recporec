@@ -28,7 +28,7 @@ export const supabase =
     : null;
 
 export async function isSupabaseReachable() {
-  if (!url) return false;
+  if (!url || !anonKey) return false;
 
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), 1500);
@@ -36,6 +36,7 @@ export async function isSupabaseReachable() {
   try {
     const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/health`, {
       cache: "no-store",
+      headers: { apikey: anonKey },
       signal: controller.signal,
     });
     return response.ok;
