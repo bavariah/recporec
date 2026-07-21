@@ -2165,13 +2165,19 @@ button {
   box-shadow: inset 0 0 0 1px rgba(100, 207, 179, 0.34), 0 9px 24px rgba(31, 143, 115, 0.12);
 }
 
-.podium-card > .rank {
-  position: absolute;
-  top: 12px;
-  right: 12px;
+.podium-card__header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
 }
 
-.podium-card > .rank svg {
+.podium-card__header > .rank {
+  flex: 0 0 auto;
+}
+
+.podium-card__header > .rank svg {
   width: 17px;
   height: 17px;
   fill: none;
@@ -2183,7 +2189,6 @@ button {
 
 .podium-card__identity {
   min-width: 0;
-  padding-right: 33px;
 }
 
 .podium-card__identity small {
@@ -3336,7 +3341,7 @@ button {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .podium-card--1 .podium-card__identity,
+  .podium-card--1 .podium-card__header,
   .podium-card--1 > b {
     grid-column: 1;
   }

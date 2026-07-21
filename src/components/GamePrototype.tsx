@@ -1236,7 +1236,7 @@ export function GamePrototype() {
             <span>Играј</span>
           </button>
           <button aria-label="Дневни изазов" className="nav-button nav-button--icon" onClick={startDailyChallenge} title="Дневни изазов" type="button">
-            <GameIcon name="sparkles" /><span className="desktop-label">Данас</span>
+            <GameIcon name="calendar" /><span className="desktop-label">Данас</span>
           </button>
           <button aria-label="Табела" className="nav-button nav-button--icon" onClick={openLeaderboard} title="Табела" type="button">
             <GameIcon name="trophy" />

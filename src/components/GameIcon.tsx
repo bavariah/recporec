@@ -2,6 +2,7 @@ import type { ReactNode, SVGProps } from "react";
 
 export type GameIconName =
   | "book"
+  | "calendar"
   | "check"
   | "close"
   | "crown"
@@ -22,6 +23,7 @@ interface GameIconProps extends SVGProps<SVGSVGElement> {
 export function GameIcon({ name, ...props }: GameIconProps) {
   const paths: Record<GameIconName, ReactNode> = {
     book: <><path d="M4.5 5.5A2.5 2.5 0 0 1 7 3h4v16H7a2.5 2.5 0 0 0-2.5 2V5.5Z"/><path d="M19.5 5.5A2.5 2.5 0 0 0 17 3h-4v16h4a2.5 2.5 0 0 1 2.5 2V5.5Z"/></>,
+    calendar: <><rect x="3.5" y="5.5" width="17" height="15" rx="2.5"/><path d="M8 3v5M16 3v5M3.5 10h17"/><path d="m8.5 15 2.2 2.2 4.8-4.8"/></>,
     check: <path d="m5 12.5 4.2 4.2L19 7" />,
     close: <><path d="m7 7 10 10"/><path d="M17 7 7 17"/></>,
     crown: <><path d="m4 8 4 3 4-6 4 6 4-3-1.5 10h-13L4 8Z"/><path d="M6.5 21h11"/></>,

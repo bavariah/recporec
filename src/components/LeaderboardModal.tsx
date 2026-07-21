@@ -50,10 +50,12 @@ export function LeaderboardModal({ currentUserId, entries, loading, onClose }: L
                 className={`podium-card podium-card--${index + 1} ${entry.user_id === currentUserId ? "is-you" : ""}`}
                 key={entry.user_id}
               >
-                <span className={`rank rank-${index + 1}`}>{index === 0 ? <GameIcon name="crown" /> : index + 1}</span>
-                <div className="podium-card__identity">
-                  <small>{index === 0 ? "ШАМПИОН" : `${index + 1}. МЕСТО`}</small>
-                  <strong>{entry.display_name}{entry.user_id === currentUserId && <em>ТИ</em>}</strong>
+                <div className="podium-card__header">
+                  <div className="podium-card__identity">
+                    <small>{index === 0 ? "ШАМПИОН" : `${index + 1}. МЕСТО`}</small>
+                    <strong>{entry.display_name}{entry.user_id === currentUserId && <em>ТИ</em>}</strong>
+                  </div>
+                  <span className={`rank rank-${index + 1}`}>{index === 0 ? <GameIcon name="crown" /> : index + 1}</span>
                 </div>
                 <b>{entry.total_points}<small> поена</small></b>
                 <dl>
