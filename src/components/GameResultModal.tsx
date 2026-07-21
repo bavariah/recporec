@@ -1,6 +1,7 @@
 "use client";
 
 import { AppModal } from "@/components/AppModal";
+import { GameIcon } from "@/components/GameIcon";
 
 export type GameResultKind = "win" | "lose" | "draw" | "summary";
 
@@ -57,8 +58,11 @@ export function GameResultModal({
   const copy = RESULT_COPY[kind];
 
   return (
-    <AppModal eyebrow={copy.eyebrow} onClose={onClose} title={copy.title}>
+    <AppModal eyebrow={copy.eyebrow} icon={<GameIcon name={kind === "win" ? "crown" : kind === "lose" ? "target" : "trophy"} />} onClose={onClose} title={copy.title} variant="result">
       <div className={`result-card result-card--${kind}`}>
+        <span className="result-spark result-spark--1" aria-hidden="true" />
+        <span className="result-spark result-spark--2" aria-hidden="true" />
+        <span className="result-spark result-spark--3" aria-hidden="true" />
         <div className="result-badge" aria-hidden="true">{copy.icon}</div>
         <p className="result-message">{copy.message}</p>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { AppModal } from "@/components/AppModal";
+import { GameIcon } from "@/components/GameIcon";
 
 interface RulesModalProps {
   onClose: () => void;
@@ -16,10 +17,10 @@ const rules = [
 
 export function RulesModal({ onClose }: RulesModalProps) {
   return (
-    <AppModal eyebrow="КАКО СЕ ИГРА" onClose={onClose} title="Правила">
+    <AppModal eyebrow="КАКО СЕ ИГРА" icon={<GameIcon name="book" />} onClose={onClose} title="Правила" variant="rules">
       <div className="rules-intro">
         <span className="rules-star" aria-hidden="true">★</span>
-        <p>Освоји више поена од ривала на табли 8×8.</p>
+        <p><strong>Освоји таблу 9×9.</strong><br />Прави речи, спајај потезе и користи бонусе паметно.</p>
       </div>
       <ol className="rules-list">
         {rules.map(([number, title, copy]) => (
@@ -30,7 +31,7 @@ export function RulesModal({ onClose }: RulesModalProps) {
         ))}
       </ol>
       <p className="rules-footnote">
-        Једном у партији можеш заменити изабрана слова и затим наставити исти потез. Исти резултат је нерешен, а четири прескакања заредом завршавају партију.
+        <GameIcon name="sparkles" /> Једном у партији можеш заменити изабрана слова и наставити исти потез. Четири прескакања заредом завршавају партију.
       </p>
       <a className="sibling-game-link" href="https://bavariah.github.io/cik-pogodi/" rel="noreferrer" target="_blank">
         Играј и ЧИК ПОГОДИ <span aria-hidden="true">↗</span>

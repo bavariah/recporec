@@ -1,6 +1,7 @@
 "use client";
 
 import { AppModal } from "@/components/AppModal";
+import { GameIcon } from "@/components/GameIcon";
 
 export interface LeaderboardEntry {
   user_id: string;
@@ -13,56 +14,69 @@ export interface LeaderboardEntry {
 }
 
 interface LeaderboardModalProps {
+  currentUserId?: string | null;
   entries: LeaderboardEntry[];
   loading: boolean;
   onClose: () => void;
 }
 
-export function LeaderboardModal({ entries, loading, onClose }: LeaderboardModalProps) {
+export function LeaderboardModal({ currentUserId, entries, loading, onClose }: LeaderboardModalProps) {
+  const podium = entries.slice(0, 3);
+  const rest = entries.slice(3);
+
   return (
-    <AppModal eyebrow="УКУПНИ ПЛАСМАН" onClose={onClose} title="Табела играча" wide>
-      <p className="leaderboard-note">Пласман је по укупним поенима, затим по победама и просеку.</p>
+    <AppModal
+      eyebrow="УКУПНИ ПЛАСМАН"
+      icon={<GameIcon name="trophy" />}
+      onClose={onClose}
+      title="Табела играча"
+      variant="leaderboard"
+      wide
+    >
+      <p className="leaderboard-note"><GameIcon name="sparkles" /> Поени одлучују пласман, затим победе и просек.</p>
       {loading ? (
-        <div className="leaderboard-empty">Учитавање табеле…</div>
+        <div className="leaderboard-empty leaderboard-empty--loading"><span className="modal-loader" />Учитавање табеле…</div>
       ) : entries.length === 0 ? (
         <div className="leaderboard-empty">
-          <span aria-hidden="true">♜</span>
+          <GameIcon name="trophy" />
           <strong>Табела чека прву завршену партију.</strong>
           <p>Резултати ће се овде појавити аутоматски.</p>
         </div>
       ) : (
         <>
-          <div className="leaderboard-table-wrap">
-            <table className="leaderboard-table">
-              <thead><tr><th>#</th><th>Играч</th><th>Партије</th><th>П / И</th><th>Поени</th><th>Просек</th></tr></thead>
-              <tbody>
-                {entries.map((entry, index) => (
-                  <tr key={entry.user_id}>
-                    <td><span className={`rank rank-${index + 1}`}>{index + 1}</span></td>
-                    <th scope="row">{entry.display_name}</th>
-                    <td>{entry.total_games}</td>
-                    <td>{entry.wins} / {entry.losses}</td>
-                    <td><strong>{entry.total_points}</strong></td>
-                    <td>{Number(entry.average_points).toFixed(1)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="leaderboard-cards">
-            {entries.map((entry, index) => (
-              <article className="leaderboard-card" key={entry.user_id}>
-                <span className={`rank rank-${index + 1}`}>{index + 1}</span>
-                <strong>{entry.display_name}</strong>
+          <div className="leaderboard-podium">
+            {podium.map((entry, index) => (
+              <article
+                className={`podium-card podium-card--${index + 1} ${entry.user_id === currentUserId ? "is-you" : ""}`}
+                key={entry.user_id}
+              >
+                <span className={`rank rank-${index + 1}`}>{index === 0 ? <GameIcon name="crown" /> : index + 1}</span>
+                <div className="podium-card__identity">
+                  <small>{index === 0 ? "ШАМПИОН" : `${index + 1}. МЕСТО`}</small>
+                  <strong>{entry.display_name}{entry.user_id === currentUserId && <em>ТИ</em>}</strong>
+                </div>
+                <b>{entry.total_points}<small> поена</small></b>
                 <dl>
-                  <div><dt>Партије</dt><dd>{entry.total_games}</dd></div>
-                  <div><dt>П / И</dt><dd>{entry.wins} / {entry.losses}</dd></div>
-                  <div><dt>Поени</dt><dd>{entry.total_points}</dd></div>
+                  <div><dt>Победе</dt><dd>{entry.wins}</dd></div>
                   <div><dt>Просек</dt><dd>{Number(entry.average_points).toFixed(1)}</dd></div>
+                  <div><dt>Партије</dt><dd>{entry.total_games}</dd></div>
                 </dl>
               </article>
             ))}
           </div>
+          {rest.length > 0 && (
+            <div className="leaderboard-rest">
+              <small>ОСТАЛИ ИГРАЧИ</small>
+              {rest.map((entry, index) => (
+                <article className={entry.user_id === currentUserId ? "is-you" : ""} key={entry.user_id}>
+                  <span>{index + 4}</span>
+                  <strong>{entry.display_name}{entry.user_id === currentUserId && <em>ТИ</em>}</strong>
+                  <small>{entry.wins} победа · просек {Number(entry.average_points).toFixed(1)}</small>
+                  <b>{entry.total_points}</b>
+                </article>
+              ))}
+            </div>
+          )}
         </>
       )}
     </AppModal>

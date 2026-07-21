@@ -23,11 +23,14 @@ import { createTileBag, drawTilesForRack, shuffleTiles } from "@/game/tiles";
 import { findBotMove } from "@/game/bot";
 import { sanitizeDraftPositions } from "@/game/draft";
 import type { Board, BoardPosition, RackTile, SerbianLetter } from "@/game/types";
-import { supabase } from "@/lib/supabase/client";
+import { isSupabaseReachable, supabase } from "@/lib/supabase/client";
 import { LeaderboardModal, type LeaderboardEntry } from "@/components/LeaderboardModal";
 import { GameResultModal, type GameResultKind } from "@/components/GameResultModal";
 import { OnlineGameModal } from "@/components/OnlineGameModal";
 import { RulesModal } from "@/components/RulesModal";
+import { SoundSettingsModal } from "@/components/SoundSettingsModal";
+import { GameIcon } from "@/components/GameIcon";
+import { playGameSound, type SoundPalette } from "@/game/sound";
 import { checkLocalWords, loadLocalDictionary } from "@/lib/localDictionary";
 
 type BackendStatus = "connecting" | "ready" | "offline";
@@ -115,10 +118,6 @@ const TURNS_PER_ROUND = 2;
 const MAX_TURNS = MAX_ROUNDS * TURNS_PER_ROUND;
 const WORD_REPORTS_STORAGE_KEY = "skrabaj-word-reports";
 
-type AudioWindow = Window & typeof globalThis & {
-  webkitAudioContext?: typeof AudioContext;
-};
-
 function readQueuedWordReports() {
   try {
     return JSON.parse(window.localStorage.getItem(WORD_REPORTS_STORAGE_KEY) ?? "[]") as string[];
@@ -129,53 +128,6 @@ function readQueuedWordReports() {
 
 function writeQueuedWordReports(words: string[]) {
   window.localStorage.setItem(WORD_REPORTS_STORAGE_KEY, JSON.stringify([...new Set(words)]));
-}
-
-type GameSoundKind = MoveFeedback["kind"] | "placed";
-
-async function playGameSound(kind: GameSoundKind) {
-  const audioWindow = window as AudioWindow;
-  const AudioContextClass = audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
-  if (!AudioContextClass) return;
-
-  const context = new AudioContextClass();
-  if (context.state === "suspended") await context.resume();
-
-  const startsAt = context.currentTime;
-  const patterns = {
-    placed: [
-      { frequency: 360, offset: 0, duration: 0.055, volume: 0.05, type: "sine" as OscillatorType },
-      { frequency: 510, offset: 0.028, duration: 0.045, volume: 0.035, type: "sine" as OscillatorType },
-    ],
-    accepted: [
-      { frequency: 520, offset: 0, duration: 0.09, volume: 0.075, type: "sine" as OscillatorType },
-      { frequency: 690, offset: 0.07, duration: 0.1, volume: 0.08, type: "sine" as OscillatorType },
-      { frequency: 920, offset: 0.15, duration: 0.13, volume: 0.085, type: "sine" as OscillatorType },
-    ],
-    rejected: [
-      { frequency: 235, offset: 0, duration: 0.13, volume: 0.08, type: "triangle" as OscillatorType },
-      { frequency: 155, offset: 0.095, duration: 0.17, volume: 0.075, type: "triangle" as OscillatorType },
-    ],
-  } satisfies Record<GameSoundKind, Array<{ frequency: number; offset: number; duration: number; volume: number; type: OscillatorType }>>;
-
-  let lastStop = startsAt;
-  for (const note of patterns[kind]) {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const noteStart = startsAt + note.offset;
-    const noteStop = noteStart + note.duration;
-    oscillator.type = note.type;
-    oscillator.frequency.setValueAtTime(note.frequency, noteStart);
-    gain.gain.setValueAtTime(0.001, noteStart);
-    gain.gain.exponentialRampToValueAtTime(note.volume, noteStart + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, noteStop);
-    oscillator.connect(gain).connect(context.destination);
-    oscillator.start(noteStart);
-    oscillator.stop(noteStop);
-    lastStop = Math.max(lastStop, noteStop);
-  }
-
-  window.setTimeout(() => void context.close(), Math.ceil((lastStop - startsAt + 0.05) * 1000));
 }
 
 function dailySeed() {
@@ -235,7 +187,7 @@ export function GamePrototype() {
   const [backendStatus, setBackendStatus] =
     useState<BackendStatus>("connecting");
   const [submitting, setSubmitting] = useState(false);
-  const [openModal, setOpenModal] = useState<"rules" | "leaderboard" | null>(null);
+  const [openModal, setOpenModal] = useState<"rules" | "leaderboard" | "sound" | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -250,6 +202,7 @@ export function GamePrototype() {
   const [moveHistory, setMoveHistory] = useState<GameMove[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundPalette, setSoundPalette] = useState<SoundPalette>("tactile");
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [localMode, setLocalMode] = useState<"practice" | "daily" | "bot">("practice");
   const [dailyBest, setDailyBest] = useState(0);
@@ -269,6 +222,10 @@ export function GamePrototype() {
     void loadLocalDictionary().catch(() => undefined);
     const timer = window.setTimeout(() => {
       setSoundEnabled(window.localStorage.getItem("skrabaj-sound") !== "off");
+      const savedPalette = window.localStorage.getItem("skrabaj-sound-palette-v2");
+      if (savedPalette === "tactile" || savedPalette === "arcade") {
+        setSoundPalette(savedPalette);
+      }
       setTutorialOpen(window.localStorage.getItem("skrabaj-tutorial-seen") !== "yes");
       setDailyBest(Number(window.localStorage.getItem(`skrabaj-daily-${dailySeed()}`) ?? 0));
       setNotificationsEnabled(typeof Notification !== "undefined" && window.localStorage.getItem("skrabaj-notifications") === "on" && Notification.permission === "granted");
@@ -348,48 +305,63 @@ export function GamePrototype() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      let session = data.session;
-      if (session) {
-        const { error: userError } = await supabase.auth.getUser();
-        if (userError) {
-          await supabase.auth.signOut({ scope: "local" });
-          session = null;
+      if (!(await isSupabaseReachable())) {
+        if (active) {
+          setUserId(null);
+          setBackendStatus("offline");
         }
-      }
-      if (!session) {
-        const { data: signedIn, error } = await supabase.auth.signInAnonymously({
-          options: { data: { display_name: "Локални играч" } },
-        });
-        if (error) {
-          if (active) {
-            setBackendStatus("offline");
-            setNotice("Онлајн игра тренутно није доступна, али офлајн вежба, дневни изазов и Букварко раде нормално.");
-          }
-          return;
-        }
-        session = signedIn.session;
+        return;
       }
 
-      if (session?.access_token) await supabase.realtime.setAuth(session.access_token);
-      if (active) {
-        setUserId(session?.user.id ?? null);
-        setBackendStatus("ready");
-        const requestedCode = new URLSearchParams(window.location.search).get("match")?.toUpperCase() ?? "";
-        if (/^[A-F0-9]{6}$/.test(requestedCode)) {
-          setInitialInviteCode(requestedCode);
-          setOnlineModalOpen(true);
+      try {
+        const { data } = await supabase.auth.getSession();
+        let session = data.session;
+        if (session) {
+          const { error: userError } = await supabase.auth.getUser();
+          if (userError) {
+            await supabase.auth.signOut({ scope: "local" });
+            session = null;
+          }
         }
-        const savedMatchId = window.localStorage.getItem("skrabaj-active-match");
-        const { data: openMatches } = await supabase.rpc("list_my_open_matches");
-        const matches = (openMatches ?? []) as OpenMatch[];
-        const resumable = savedMatchId
-          ? matches.find((match) => match.match_id === savedMatchId)
-          : null;
-        if (active && resumable?.match_id) {
-          setActiveMatchId(resumable.match_id);
-        } else if (savedMatchId) {
-          window.localStorage.removeItem("skrabaj-active-match");
+        if (!session) {
+          const { data: signedIn, error } = await supabase.auth.signInAnonymously({
+            options: { data: { display_name: "Локални играч" } },
+          });
+          if (error) {
+            if (active) {
+              setBackendStatus("offline");
+              setNotice("Онлајн игра тренутно није доступна, али офлајн режими раде нормално.");
+            }
+            return;
+          }
+          session = signedIn.session;
+        }
+
+        if (session?.access_token) await supabase.realtime.setAuth(session.access_token);
+        if (active) {
+          setUserId(session?.user.id ?? null);
+          setBackendStatus("ready");
+          const requestedCode = new URLSearchParams(window.location.search).get("match")?.toUpperCase() ?? "";
+          if (/^[A-F0-9]{6}$/.test(requestedCode)) {
+            setInitialInviteCode(requestedCode);
+            setOnlineModalOpen(true);
+          }
+          const savedMatchId = window.localStorage.getItem("skrabaj-active-match");
+          const { data: openMatches } = await supabase.rpc("list_my_open_matches");
+          const matches = (openMatches ?? []) as OpenMatch[];
+          const resumable = savedMatchId
+            ? matches.find((match) => match.match_id === savedMatchId)
+            : null;
+          if (active && resumable?.match_id) {
+            setActiveMatchId(resumable.match_id);
+          } else if (savedMatchId) {
+            window.localStorage.removeItem("skrabaj-active-match");
+          }
+        }
+      } catch {
+        if (active) {
+          setUserId(null);
+          setBackendStatus("offline");
         }
       }
     }
@@ -506,7 +478,7 @@ export function GamePrototype() {
     const words = pendingWordKey.split("|");
 
     async function checkPendingWords() {
-      if (supabase) {
+      if (supabase && backendStatus === "ready") {
         const { data, error } = await supabase.rpc("check_dictionary_words", { p_words: words });
         if (!error) {
           const acceptedWords = new Set(
@@ -541,7 +513,7 @@ export function GamePrototype() {
     return () => {
       active = false;
     };
-  }, [pendingWordKey]);
+  }, [backendStatus, pendingWordKey]);
   const lastMoveTileIds = moveHistory.at(-1)?.tileIds ?? [];
   const viewer = onlineState?.players.find((player) => player.user_id === userId) ?? null;
   const opponent = onlineState?.players.find((player) => player.user_id !== userId) ?? null;
@@ -596,7 +568,7 @@ export function GamePrototype() {
     }
     if (soundEnabled) {
       navigator.vibrate?.(kind === "accepted" ? 24 : [20, 35, 20]);
-      void playGameSound(kind);
+      void playGameSound(kind, soundPalette);
     }
   }
 
@@ -613,13 +585,14 @@ export function GamePrototype() {
     setTutorialOpen(false);
   }
 
-  function toggleSound() {
-    setSoundEnabled((current) => {
-      const next = !current;
-      window.localStorage.setItem("skrabaj-sound", next ? "on" : "off");
-      if (next) void playGameSound("accepted");
-      return next;
-    });
+  function setSound(next: boolean) {
+    setSoundEnabled(next);
+    window.localStorage.setItem("skrabaj-sound", next ? "on" : "off");
+  }
+
+  function chooseSoundPalette(next: SoundPalette) {
+    setSoundPalette(next);
+    window.localStorage.setItem("skrabaj-sound-palette-v2", next);
   }
 
   async function enableTurnNotifications() {
@@ -922,7 +895,10 @@ export function GamePrototype() {
 
   async function openLeaderboard() {
     setOpenModal("leaderboard");
-    if (!supabase) return;
+    if (!supabase || backendStatus !== "ready") {
+      setLeaderboardLoading(false);
+      return;
+    }
 
     setLeaderboardLoading(true);
     const { data, error } = await supabase.rpc("get_leaderboard", { p_limit: 50 });
@@ -1069,7 +1045,7 @@ export function GamePrototype() {
     }));
     if (soundEnabled) {
       navigator.vibrate?.(8);
-      void playGameSound("placed");
+      void playGameSound("placed", soundPalette);
     }
     if (!isOnline && game.turn >= MAX_ROUNDS) setResultModalOpen(true);
     resetSelection();
@@ -1151,7 +1127,7 @@ export function GamePrototype() {
       return;
     }
 
-    if (supabase) {
+    if (supabase && backendStatus === "ready") {
       const words = result.words.map(({ word }) => word.toLowerCase());
       const { data, error } = await supabase.rpc("check_dictionary_words", {
         p_words: words,
@@ -1260,21 +1236,18 @@ export function GamePrototype() {
             <span>Играј</span>
           </button>
           <button aria-label="Дневни изазов" className="nav-button nav-button--icon" onClick={startDailyChallenge} title="Дневни изазов" type="button">
-            <span aria-hidden="true">☀</span><span className="desktop-label">Данас</span>
+            <GameIcon name="sparkles" /><span className="desktop-label">Данас</span>
           </button>
           <button aria-label="Табела" className="nav-button nav-button--icon" onClick={openLeaderboard} title="Табела" type="button">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v1.5A3.5 3.5 0 0 0 8.5 11M16 6h3v1.5a3.5 3.5 0 0 1-3.5 3.5M12 12v4M9 20h6M10 16h4v4"/></svg>
+            <GameIcon name="trophy" />
             <span className="desktop-label">Табела</span>
           </button>
           <button aria-label="Правила" className="nav-button nav-button--icon" onClick={() => setOpenModal("rules")} title="Правила" type="button">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 17.2v.1M9.8 9.2a2.3 2.3 0 1 1 3.6 1.9c-.9.6-1.4 1.1-1.4 2.2"/><circle cx="12" cy="12" r="9"/></svg>
+            <GameIcon name="book" />
             <span className="desktop-label">Правила</span>
           </button>
-          <button aria-label={soundEnabled ? "Искључи звук" : "Укључи звук"} className="nav-button nav-button--icon nav-button--sound" onClick={toggleSound} title={soundEnabled ? "Искључи звук" : "Укључи звук"} type="button">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M5 10v4h3l4 3V7l-4 3H5Z" />
-              {soundEnabled ? <><path d="M15 9.5a4 4 0 0 1 0 5" /><path d="M17.5 7a7 7 0 0 1 0 10" /></> : <path d="m15 10 5 5m0-5-5 5" />}
-            </svg>
+          <button aria-label="Подешавање звука" className={`nav-button nav-button--icon nav-button--sound ${soundEnabled ? "is-on" : "is-off"}`} onClick={() => setOpenModal("sound")} title="Подешавање звука" type="button">
+            <GameIcon name={soundEnabled ? "sound" : "soundOff"} />
           </button>
         </div>
       </header>
@@ -1568,9 +1541,19 @@ export function GamePrototype() {
       {openModal === "rules" && <RulesModal onClose={() => setOpenModal(null)} />}
       {openModal === "leaderboard" && (
         <LeaderboardModal
+          currentUserId={userId}
           entries={leaderboard}
           loading={leaderboardLoading}
           onClose={() => setOpenModal(null)}
+        />
+      )}
+      {openModal === "sound" && (
+        <SoundSettingsModal
+          enabled={soundEnabled}
+          onClose={() => setOpenModal(null)}
+          onEnabledChange={setSound}
+          onPaletteChange={chooseSoundPalette}
+          palette={soundPalette}
         />
       )}
       {onlineModalOpen && (
