@@ -4012,6 +4012,7 @@ input:focus-visible {
 .turn-clock svg { width: 12px; stroke: currentColor; stroke-width: 2; }
 .turn-clock b { font-size: 11px; }
 .turn-clock--urgent { color: #d43f25; animation: clock-urgent .7s ease-in-out infinite alternate; }
+.turn-clock--critical { color: #ef321d; animation-duration: .38s; }
 
 .daily-modal { display: grid; gap: 10px; }
 .daily-modal > p { margin: 0; color: #607382; font-size: 10px; line-height: 1.5; }

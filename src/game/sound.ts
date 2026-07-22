@@ -1,4 +1,10 @@
-export type GameSoundKind = "accepted" | "placed" | "rejected";
+export type GameSoundKind =
+  | "accepted"
+  | "placed"
+  | "rejected"
+  | "timerExpired"
+  | "timerTick"
+  | "timerWarning";
 export type SoundPalette = "arcade" | "tactile";
 
 export const SOUND_PALETTES: Array<{
@@ -103,6 +109,20 @@ const soundPatterns: Record<SoundPalette, Record<GameSoundKind, (context: AudioC
       tone(context, { duration: 0.16, frequency: 210, slideTo: 125, type: "triangle", volume: 0.055 });
       tone(context, { duration: 0.13, frequency: 145, offset: 0.105, slideTo: 105, type: "sine", volume: 0.04 });
     },
+    timerWarning(context) {
+      tap(context, 0, 0.026, 620);
+      tone(context, { duration: 0.12, frequency: 160, slideTo: 108, type: "sine", volume: 0.045 });
+      tone(context, { duration: 0.12, frequency: 142, offset: 0.14, slideTo: 94, type: "sine", volume: 0.04 });
+    },
+    timerTick(context) {
+      tap(context, 0, 0.023, 540);
+      tone(context, { duration: 0.075, frequency: 138, slideTo: 96, type: "sine", volume: 0.038 });
+    },
+    timerExpired(context) {
+      tap(context, 0, 0.035, 360);
+      tone(context, { duration: 0.3, frequency: 132, slideTo: 54, type: "triangle", volume: 0.06 });
+      tone(context, { duration: 0.18, frequency: 82, offset: 0.1, slideTo: 48, type: "sine", volume: 0.045 });
+    },
   },
   arcade: {
     placed(context) {
@@ -117,8 +137,24 @@ const soundPatterns: Record<SoundPalette, Record<GameSoundKind, (context: AudioC
       tone(context, { duration: 0.2, frequency: 260, slideTo: 105, type: "sawtooth", volume: 0.034 });
       tap(context, 0.1, 0.025, 420);
     },
+    timerWarning(context) {
+      tone(context, { duration: 0.09, frequency: 330, slideTo: 270, type: "square", volume: 0.025 });
+      tone(context, { duration: 0.09, frequency: 300, offset: 0.13, slideTo: 235, type: "square", volume: 0.023 });
+    },
+    timerTick(context) {
+      tone(context, { duration: 0.055, frequency: 260, slideTo: 205, type: "square", volume: 0.022 });
+    },
+    timerExpired(context) {
+      tone(context, { duration: 0.26, frequency: 240, slideTo: 72, type: "sawtooth", volume: 0.035 });
+      tap(context, 0.08, 0.026, 320);
+    },
   },
 };
+
+export async function unlockGameAudio() {
+  const context = getAudioContext();
+  if (context?.state === "suspended") await context.resume();
+}
 
 export async function playGameSound(kind: GameSoundKind, palette: SoundPalette) {
   const context = getAudioContext();

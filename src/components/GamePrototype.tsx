@@ -37,7 +37,7 @@ import { GameIcon } from "@/components/GameIcon";
 import { DailyChallengeModal } from "@/components/DailyChallengeModal";
 import { AccountModal, type ProfileUpdateInput } from "@/components/AccountModal";
 import { PlayerAvatar, type PlayerProfileAppearance } from "@/components/PlayerAvatar";
-import { playGameSound, type SoundPalette } from "@/game/sound";
+import { playGameSound, unlockGameAudio, type SoundPalette } from "@/game/sound";
 import { checkLocalWords, loadLocalDictionary } from "@/lib/localDictionary";
 
 type BackendStatus = "connecting" | "ready" | "offline";
@@ -247,6 +247,7 @@ export function GamePrototype() {
   const draftChannelRef = useRef<RealtimeChannel | null>(null);
   const rivalDraftTimeoutRef = useRef<number | null>(null);
   const expiringVersionRef = useRef<number | null>(null);
+  const timerCueRef = useRef<{ cue: string | null; deadline: string | null }>({ cue: null, deadline: null });
 
   useEffect(() => {
     void loadLocalDictionary().catch(() => undefined);
@@ -261,6 +262,16 @@ export function GamePrototype() {
       setNotificationsEnabled(typeof Notification !== "undefined" && window.localStorage.getItem("skrabaj-notifications") === "on" && Notification.permission === "granted");
     }, 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const unlockAudio = () => void unlockGameAudio().catch(() => undefined);
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
   }, []);
 
   useEffect(() => {
@@ -601,6 +612,48 @@ export function GamePrototype() {
       setNotice("Време за потез је истекло — потез је аутоматски прескочен.");
     });
   }, [applyOnlineMatchState, onlineState, remainingSeconds]);
+
+  useEffect(() => {
+    const match = onlineState?.match;
+    const deadline = match?.turn_deadline ?? null;
+    if (!match || !deadline || !isTimedMatch || match.status !== "active" || !canPlayOnline || remainingSeconds === null) return;
+
+    const cue = remainingSeconds === 10
+      ? "warning"
+      : remainingSeconds >= 1 && remainingSeconds <= 5
+        ? `tick-${remainingSeconds}`
+        : remainingSeconds === 0
+          ? "expired"
+          : null;
+    if (!cue) return;
+
+    if (timerCueRef.current.deadline !== deadline) {
+      timerCueRef.current = { cue: null, deadline };
+    }
+    if (timerCueRef.current.cue === cue) return;
+
+    const storageKey = `skrabaj-timer-cues-${match.id}`;
+    let saved: { cues: string[]; deadline: string } = { cues: [], deadline };
+    try {
+      const parsed = JSON.parse(window.sessionStorage.getItem(storageKey) ?? "null") as typeof saved | null;
+      if (parsed?.deadline === deadline && Array.isArray(parsed.cues)) saved = parsed;
+    } catch {
+      // A blocked session store should never prevent the actual timer.
+    }
+    timerCueRef.current.cue = cue;
+    if (saved.cues.includes(cue)) return;
+    saved.cues.push(cue);
+    try {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(saved));
+    } catch {
+      // Audio still works when storage is unavailable.
+    }
+
+    if (!soundEnabled) return;
+    if (cue === "warning") void playGameSound("timerWarning", soundPalette).catch(() => undefined);
+    else if (cue === "expired") void playGameSound("timerExpired", soundPalette).catch(() => undefined);
+    else void playGameSound("timerTick", soundPalette).catch(() => undefined);
+  }, [canPlayOnline, isTimedMatch, onlineState?.match, remainingSeconds, soundEnabled, soundPalette]);
 
   useEffect(() => {
     if (!isOnline || !canPlayOnline || !userId || !draftChannelReady) return;
@@ -1597,7 +1650,7 @@ export function GamePrototype() {
             })}
           </div>
           {remainingSeconds !== null && (
-            <div className={`turn-clock ${remainingSeconds <= 10 ? "turn-clock--urgent" : ""}`} aria-label={`Преостало време ${remainingSeconds} секунди`}>
+            <div className={`turn-clock ${remainingSeconds <= 10 ? "turn-clock--urgent" : ""} ${remainingSeconds <= 5 ? "turn-clock--critical" : ""}`} aria-label={`Преостало време ${remainingSeconds} секунди`}>
               <GameIcon name="clock" /><b>0:{String(remainingSeconds).padStart(2, "0")}</b>
             </div>
           )}
