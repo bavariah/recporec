@@ -12,8 +12,6 @@ interface AccountModalProps {
   notice?: string;
   onClose: () => void;
   onEmailAuth: (email: string, intent: "login" | "upgrade") => Promise<boolean>;
-  onEmailOtpVerify: (email: string, token: string, intent: "login" | "upgrade") => Promise<boolean>;
-  onGoogleAuth: (intent: "login" | "upgrade") => Promise<void>;
   onSignOut: () => Promise<void>;
 }
 
@@ -24,33 +22,18 @@ export function AccountModal({
   notice,
   onClose,
   onEmailAuth,
-  onEmailOtpVerify,
-  onGoogleAuth,
   onSignOut,
 }: AccountModalProps) {
   const [existingAccount, setExistingAccount] = useState(false);
   const [email, setEmail] = useState("");
-  const [emailSent, setEmailSent] = useState(false);
-  const [otp, setOtp] = useState("");
   const intent = existingAccount ? "login" : "upgrade";
 
   function switchEmailMode() {
     setExistingAccount((current) => !current);
-    setEmailSent(false);
-    setOtp("");
   }
 
   async function sendEmail() {
-    if (await onEmailAuth(email.trim(), intent)) {
-      setEmailSent(true);
-      setOtp("");
-    }
-  }
-
-  async function verifyCode() {
-    if (await onEmailOtpVerify(email.trim(), otp, intent)) {
-      setOtp("");
-    }
+    await onEmailAuth(email.trim(), intent);
   }
 
   return (
@@ -70,23 +53,10 @@ export function AccountModal({
             </div>
 
             <div className="account-form account-form--standalone">
-              <button className="google-action" disabled={loading} onClick={() => onGoogleAuth(intent)} type="button">
-                <b>G</b> {existingAccount ? "Пријави се преко Google-а" : "Сачувај преко Google-а"}
-              </button>
-              <div className="online-divider"><span>или имејлом</span></div>
               <label><span>ИМЕЈЛ</span><input autoComplete="email" onChange={(event) => setEmail(event.target.value)} placeholder="ime@primer.rs" type="email" value={email} /></label>
-              {emailSent ? (
-                <div className="email-code-step">
-                  <p><GameIcon name="check" /> Послали смо ти имејл. Отвори линк или унеси шест цифара ако је код приказан.</p>
-                  <label><span>КОД ИЗ ИМЕЈЛА</span><input autoComplete="one-time-code" inputMode="numeric" maxLength={6} onChange={(event) => setOtp(event.target.value.replace(/\D/g, ""))} placeholder="000000" value={otp} /></label>
-                  <button className="primary-action modal-action" disabled={loading || otp.length !== 6} onClick={verifyCode} type="button">{loading ? "ПРОВЕРА…" : "ПОТВРДИ КОД"}</button>
-                  <button className="account-switch" disabled={loading} onClick={sendEmail} type="button">Пошаљи поново</button>
-                </div>
-              ) : (
-                <button className="primary-action modal-action" disabled={loading || !email.includes("@")} onClick={sendEmail} type="button">
-                  {loading ? "ШАЉЕМО…" : existingAccount ? "ПОШАЉИ ЛИНК / КОД" : "САЧУВАЈ ПРЕКО ИМЕЈЛА"}
-                </button>
-              )}
+              <button className="primary-action modal-action" disabled={loading || !email.includes("@")} onClick={sendEmail} type="button">
+                {loading ? "ШАЉЕМО…" : existingAccount ? "ПОШАЉИ ЛИНК ЗА ПРИЈАВУ" : "САЧУВАЈ ПРЕКО ИМЕЈЛА"}
+              </button>
               <button className="account-switch" onClick={switchEmailMode} type="button">
                 {existingAccount ? "Немаш налог? Сачувај овај напредак" : "Већ имаш налог? Пошаљи ми линк"}
               </button>

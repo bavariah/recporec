@@ -948,54 +948,22 @@ export function GamePrototype() {
     setOnlineModalOpen(false);
   }
 
-  async function authenticateWithGoogle(intent: "login" | "upgrade") {
-    if (!supabase) return;
-    setOnlineLoading(true);
-    setOnlineNotice("");
-    const redirectTo = `${window.location.origin}${window.location.pathname}`;
-    const result = intent === "upgrade" && account.isAnonymous
-      ? await supabase.auth.linkIdentity({ provider: "google", options: { redirectTo } })
-      : await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
-    if (result.error) setOnlineNotice(`Google пријава није успела: ${result.error.message}`);
-    setOnlineLoading(false);
-  }
-
   async function authenticateWithEmail(email: string, intent: "login" | "upgrade") {
     if (!supabase) return false;
     setOnlineLoading(true);
     setOnlineNotice("");
-    const emailRedirectTo = `${window.location.origin}${window.location.pathname}`;
     const result = intent === "upgrade"
-      ? await supabase.auth.updateUser({ email }, { emailRedirectTo })
-      : await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo, shouldCreateUser: false } });
+      ? await supabase.auth.updateUser({ email })
+      : await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
     if (result.error) {
       setOnlineNotice(`Имејл није послат: ${result.error.message}`);
     } else {
       setOnlineNotice(intent === "upgrade"
-        ? "Провери имејл и потврди адресу. Твој досадашњи напредак остаје сачуван."
-        : "Послали смо ти линк за пријаву. Ако имејл приказује код, можеш га унети овде.");
+        ? "Послали смо ти линк. Отвори га у овом прегледачу да сачуваш досадашњи напредак."
+        : "Послали смо ти линк за пријаву. Отвори га у овом прегледачу.");
     }
     setOnlineLoading(false);
     return !result.error;
-  }
-
-  async function verifyEmailOtp(email: string, token: string, intent: "login" | "upgrade") {
-    if (!supabase) return false;
-    setOnlineLoading(true);
-    setOnlineNotice("");
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: intent === "upgrade" ? "email_change" : "email",
-    });
-    if (error) {
-      setOnlineNotice(`Код није потврђен: ${error.message}`);
-    } else {
-      setOnlineNotice(intent === "upgrade" ? "Напредак је сачуван и налог је повезан." : "Успешно си пријављен.");
-      await refreshPlayerHub();
-    }
-    setOnlineLoading(false);
-    return !error;
   }
 
   async function signOutAccount() {
@@ -1884,8 +1852,6 @@ export function GamePrototype() {
           notice={onlineNotice}
           onClose={() => setAccountModalOpen(false)}
           onEmailAuth={authenticateWithEmail}
-          onEmailOtpVerify={verifyEmailOtp}
-          onGoogleAuth={authenticateWithGoogle}
           onSignOut={signOutAccount}
         />
       )}
