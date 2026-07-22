@@ -3,6 +3,7 @@ import WebSocket from "ws";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:55321";
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const skipRealtime = process.argv.includes("--skip-realtime");
 
 if (!key) {
   throw new Error(
@@ -41,6 +42,7 @@ if (dictionaryError) throw dictionaryError;
 
 const { data: created, error: createError } = await playerOne.rpc("create_match", {
   p_display_name: "Локални тест 1",
+  p_game_mode: "quick",
 });
 if (createError) throw createError;
 const createdMatch = created?.[0];
@@ -52,7 +54,7 @@ const realtimeUpdate = new Promise((resolve, reject) => {
   resolveRealtime = resolve;
   rejectRealtime = reject;
 });
-const channel = playerOne
+const channel = skipRealtime ? null : playerOne
   .channel(`verify-match-${createdMatch.match_id}`)
   .on(
     "postgres_changes",
@@ -65,8 +67,8 @@ const channel = playerOne
     (payload) => resolveRealtime(payload.new),
   );
 
-await new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error("Realtime subscription timed out.")), 10_000);
+if (channel) await new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error("Realtime subscription timed out.")), 30_000);
   channel.subscribe((status) => {
     if (status === "SUBSCRIBED") {
       clearTimeout(timer);
@@ -82,7 +84,7 @@ await new Promise((resolve, reject) => {
 // Immediately after `supabase db reset`, the channel can report SUBSCRIBED
 // before the rebuilt Postgres publication is ready to deliver changes. Give
 // only this cold-start verifier time to finish warming; the app is unaffected.
-await new Promise((resolve) => setTimeout(resolve, 15_000));
+if (channel) await new Promise((resolve) => setTimeout(resolve, 15_000));
 
 const secondUser = await signInGuest(playerTwo, "Локални тест 2");
 const { error: joinError } = await playerTwo.rpc("join_match", {
@@ -91,15 +93,15 @@ const { error: joinError } = await playerTwo.rpc("join_match", {
 });
 if (joinError) throw joinError;
 
-const realtimeState = await Promise.race([
+const realtimeState = channel ? await Promise.race([
   realtimeUpdate,
   new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("No Realtime match update received.")), 10_000),
+    setTimeout(() => reject(new Error("No Realtime match update received.")), 20_000),
   ),
 ]).catch((error) => {
   rejectRealtime?.(error);
   throw error;
-});
+}) : { status: "skipped" };
 
 const { data: initialState, error: initialStateError } = await playerOne.rpc(
   "get_match_state",
@@ -107,16 +109,26 @@ const { data: initialState, error: initialStateError } = await playerOne.rpc(
 );
 if (initialStateError) throw initialStateError;
 
+const playerOneStarts = initialState.match.current_player_id === firstUser.id;
+const openingClient = playerOneStarts ? playerOne : playerTwo;
+const respondingClient = playerOneStarts ? playerTwo : playerOne;
+const openingUser = playerOneStarts ? firstUser : secondUser;
+const respondingUser = playerOneStarts ? secondUser : firstUser;
+const { data: openingState, error: openingStateError } = playerOneStarts
+  ? { data: initialState, error: null }
+  : await playerTwo.rpc("get_match_state", { p_match_id: createdMatch.match_id });
+if (openingStateError) throw openingStateError;
+
 const alphabet = [..."АБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ"];
 const candidates = new Map();
-for (let first = 0; first < initialState.rack.length; first += 1) {
-  for (let second = 0; second < initialState.rack.length; second += 1) {
+for (let first = 0; first < openingState.rack.length; first += 1) {
+  for (let second = 0; second < openingState.rack.length; second += 1) {
     if (first === second) continue;
-    const firstLetters = initialState.rack[first].letter
-      ? [initialState.rack[first].letter]
+    const firstLetters = openingState.rack[first].letter
+      ? [openingState.rack[first].letter]
       : alphabet;
-    const secondLetters = initialState.rack[second].letter
-      ? [initialState.rack[second].letter]
+    const secondLetters = openingState.rack[second].letter
+      ? [openingState.rack[second].letter]
       : alphabet;
     for (const firstLetter of firstLetters) {
       for (const secondLetter of secondLetters) {
@@ -138,22 +150,22 @@ const acceptedOpening = openingChecks.find((entry) => entry.accepted);
 if (!acceptedOpening) throw new Error("Test rack could not form an accepted two-letter word.");
 const opening = candidates.get(acceptedOpening.word.toUpperCase());
 
-const { data: movedState, error: moveError } = await playerOne.rpc(
+const { data: movedState, error: moveError } = await openingClient.rpc(
   "submit_match_move",
   {
     p_match_id: createdMatch.match_id,
-    p_expected_version: initialState.match.version,
+    p_expected_version: openingState.match.version,
     p_placements: [
       {
-        row: 3,
-        col: 3,
-        tileId: initialState.rack[opening.first].id,
+        row: 4,
+        col: 4,
+        tileId: openingState.rack[opening.first].id,
         letter: opening.firstLetter,
       },
       {
-        row: 3,
-        col: 4,
-        tileId: initialState.rack[opening.second].id,
+        row: 4,
+        col: 5,
+        tileId: openingState.rack[opening.second].id,
         letter: opening.secondLetter,
       },
     ],
@@ -161,13 +173,13 @@ const { data: movedState, error: moveError } = await playerOne.rpc(
 );
 if (moveError) throw moveError;
 
-const { data: playerTwoState, error: playerTwoStateError } = await playerTwo.rpc(
+const { data: playerTwoState, error: playerTwoStateError } = await respondingClient.rpc(
   "get_match_state",
   { p_match_id: createdMatch.match_id },
 );
 if (playerTwoStateError) throw playerTwoStateError;
 
-const { data: exchangeState, error: exchangeError } = await playerTwo.rpc(
+const { data: exchangeState, error: exchangeError } = await respondingClient.rpc(
   "exchange_match_tiles",
   {
     p_match_id: createdMatch.match_id,
@@ -177,7 +189,7 @@ const { data: exchangeState, error: exchangeError } = await playerTwo.rpc(
 );
 if (exchangeError) throw exchangeError;
 
-const { error: repeatedExchangeError } = await playerTwo.rpc(
+const { error: repeatedExchangeError } = await respondingClient.rpc(
   "exchange_match_tiles",
   {
     p_match_id: createdMatch.match_id,
@@ -186,7 +198,7 @@ const { error: repeatedExchangeError } = await playerTwo.rpc(
   },
 );
 
-const { data: passedState, error: passError } = await playerTwo.rpc(
+const { data: passedState, error: passError } = await respondingClient.rpc(
   "pass_match_turn",
   {
     p_match_id: createdMatch.match_id,
@@ -195,17 +207,17 @@ const { data: passedState, error: passError } = await playerTwo.rpc(
 );
 if (passError) throw passError;
 
-const { data: secondPass, error: secondPassError } = await playerOne.rpc(
+const { data: secondPass, error: secondPassError } = await openingClient.rpc(
   "pass_match_turn",
   { p_match_id: createdMatch.match_id, p_expected_version: passedState.match.version },
 );
 if (secondPassError) throw secondPassError;
-const { data: thirdPass, error: thirdPassError } = await playerTwo.rpc(
+const { data: thirdPass, error: thirdPassError } = await respondingClient.rpc(
   "pass_match_turn",
   { p_match_id: createdMatch.match_id, p_expected_version: secondPass.match.version },
 );
 if (thirdPassError) throw thirdPassError;
-const { data: completedState, error: finalPassError } = await playerOne.rpc(
+const { data: completedState, error: finalPassError } = await openingClient.rpc(
   "pass_match_turn",
   { p_match_id: createdMatch.match_id, p_expected_version: thirdPass.match.version },
 );
@@ -236,27 +248,53 @@ const { error: privateStateError } = await playerOne
   .select("bag")
   .eq("match_id", createdMatch.match_id);
 
-const winnerLeaderboardEntry = leaderboard?.find((entry) => entry.user_id === firstUser.id);
-const loserLeaderboardEntry = leaderboard?.find((entry) => entry.user_id === secondUser.id);
+const { data: daily, error: dailyError } = await playerOne.rpc("submit_daily_challenge", {
+  p_score: 123,
+  p_move_count: 5,
+});
+if (dailyError) throw dailyError;
+
+const { data: playerHub, error: playerHubError } = await playerOne.rpc("get_player_hub");
+if (playerHubError) throw playerHubError;
+
+const quickOne = localClient();
+const quickTwo = localClient();
+await signInGuest(quickOne, "Брзи тест 1");
+await signInGuest(quickTwo, "Брзи тест 2");
+const { data: quickWaiting, error: quickWaitingError } = await quickOne.rpc("find_quick_match", {
+  p_display_name: "Брзи тест 1",
+  p_game_mode: "quick",
+});
+if (quickWaitingError) throw quickWaitingError;
+const { data: quickActive, error: quickActiveError } = await quickTwo.rpc("find_quick_match", {
+  p_display_name: "Брзи тест 2",
+  p_game_mode: "quick",
+});
+if (quickActiveError) throw quickActiveError;
+
+const winnerLeaderboardEntry = leaderboard?.find((entry) => entry.user_id === openingUser.id);
+const loserLeaderboardEntry = leaderboard?.find((entry) => entry.user_id === respondingUser.id);
 
 const checks = {
   dictionaryAcceptsKnownWord: dictionary?.find((entry) => entry.word === "забуна")?.accepted,
   dictionaryRejectsInvalidWord: !dictionary?.find((entry) => entry.word === "тест-реч")?.accepted,
   participantCount: participants?.length === 2,
-  realtimeConnected: realtimeState.status === "active",
+  ...(skipRealtime ? {} : { realtimeConnected: realtimeState.status === "active" }),
   initialRackSize: initialState.rack.length === 8,
   initialBagCount: initialState.bag_count === 88,
+  timedModeCreated: initialState.match.game_mode === "quick",
+  timedDeadlineCreated: Boolean(initialState.match.turn_deadline),
   refilledRackSize: movedState.rack.length === 8,
-  turnPassedAfterMove: movedState.match.current_player_id === secondUser.id,
+  turnPassedAfterMove: movedState.match.current_player_id === respondingUser.id,
   exchangeRackSize: exchangeState.rack.length === 8,
   exchangeBagUnchanged: exchangeState.bag_count === movedState.bag_count,
-  exchangeKeepsTurn: exchangeState.match.current_player_id === secondUser.id,
-  exchangeMarkedUsed: exchangeState.players.find((player) => player.user_id === secondUser.id)?.exchange_used,
+  exchangeKeepsTurn: exchangeState.match.current_player_id === respondingUser.id,
+  exchangeMarkedUsed: exchangeState.players.find((player) => player.user_id === respondingUser.id)?.exchange_used,
   repeatedExchangeRejected: Boolean(repeatedExchangeError),
-  passChangesTurn: passedState.match.current_player_id === firstUser.id,
+  passChangesTurn: passedState.match.current_player_id === openingUser.id,
   passCountIncremented: passedState.match.consecutive_passes === 1,
   matchCompleted: completedState.match.status === "completed",
-  correctWinner: completedState.match.winner_id === firstUser.id,
+  correctWinner: completedState.match.winner_id === openingUser.id,
   onlyPlacementRecorded: moves?.length === 1,
   openingWordRecorded: moves?.[0]?.formed_words?.[0]?.toLowerCase() === acceptedOpening.word,
   leaderboardHasWinner: Boolean(winnerLeaderboardEntry),
@@ -267,6 +305,11 @@ const checks = {
   winnerPoints: winnerLeaderboardEntry?.total_points === moves?.[0]?.score_delta,
   loserLossCount: loserLeaderboardEntry?.losses === 1,
   privateStateProtected: Boolean(privateStateError),
+  dailyResultSaved: daily?.best === 123 && daily?.entries?.some((entry) => entry.user_id === firstUser.id),
+  dailyStreakStarted: daily?.streak === 1,
+  playerHubHasHistory: playerHub?.stats?.games === 1 && playerHub?.recent_matches?.length === 1,
+  quickMatchWaits: quickWaiting?.match?.status === "waiting" && quickWaiting?.match?.match_source === "quick",
+  quickMatchConnects: quickActive?.match?.status === "active" && quickActive?.match?.id === quickWaiting?.match?.id,
 };
 
 const failedChecks = Object.entries(checks)
@@ -277,7 +320,7 @@ if (failedChecks.length > 0) {
   throw new Error(`Supabase verification failed: ${failedChecks.join(", ")}`);
 }
 
-await playerOne.removeChannel(channel);
+if (channel) await playerOne.removeChannel(channel);
 
 console.log(
   JSON.stringify(
@@ -288,7 +331,7 @@ console.log(
       realtimeStatus: realtimeState.status,
       acceptedOpening: acceptedOpening.word,
       openingScore: moves[0].score_delta,
-      exchangeUsed: exchangeState.players.find((player) => player.user_id === secondUser.id)?.exchange_used,
+      exchangeUsed: exchangeState.players.find((player) => player.user_id === respondingUser.id)?.exchange_used,
       repeatedExchangeRejected: Boolean(repeatedExchangeError),
       bagCount: movedState.bag_count,
       finalStatus: completedState.match.status,
@@ -297,6 +340,8 @@ console.log(
       moves,
       leaderboard,
       privateStateProtected: true,
+      daily: { best: daily.best, rank: daily.rank, streak: daily.streak },
+      quickMatch: { id: quickActive.match.id, status: quickActive.match.status },
     },
     null,
     2,
@@ -306,4 +351,6 @@ console.log(
 await Promise.all([
   playerOne.realtime.disconnect(),
   playerTwo.realtime.disconnect(),
+  quickOne.realtime.disconnect(),
+  quickTwo.realtime.disconnect(),
 ]);

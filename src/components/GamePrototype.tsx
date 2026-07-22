@@ -26,10 +26,15 @@ import type { Board, BoardPosition, RackTile, SerbianLetter } from "@/game/types
 import { isSupabaseReachable, supabase } from "@/lib/supabase/client";
 import { LeaderboardModal, type LeaderboardEntry } from "@/components/LeaderboardModal";
 import { GameResultModal, type GameResultKind } from "@/components/GameResultModal";
-import { OnlineGameModal } from "@/components/OnlineGameModal";
+import {
+  OnlineGameModal,
+  type GameMode,
+  type PlayerHub,
+} from "@/components/OnlineGameModal";
 import { RulesModal } from "@/components/RulesModal";
 import { SoundSettingsModal } from "@/components/SoundSettingsModal";
 import { GameIcon } from "@/components/GameIcon";
+import { DailyChallengeModal } from "@/components/DailyChallengeModal";
 import { playGameSound, type SoundPalette } from "@/game/sound";
 import { checkLocalWords, loadLocalDictionary } from "@/lib/localDictionary";
 
@@ -72,6 +77,9 @@ interface OnlineMatchRecord {
   turn_number: number;
   version: number;
   consecutive_passes: number;
+  game_mode: GameMode;
+  match_source: "invite" | "quick";
+  turn_deadline: string | null;
 }
 
 interface OnlineMatchState {
@@ -96,6 +104,17 @@ interface OpenMatch {
   match_id: string;
   status: string;
   updated_at: string;
+  game_mode: GameMode;
+  match_source: "invite" | "quick";
+  opponent_name: string | null;
+}
+
+interface DailyChallengeData {
+  best: number;
+  date: string;
+  entries: Array<{ display_name: string; rank: number; score: number; user_id: string }>;
+  rank: number | null;
+  streak: number;
 }
 
 interface MoveFeedback {
@@ -187,13 +206,17 @@ export function GamePrototype() {
   const [backendStatus, setBackendStatus] =
     useState<BackendStatus>("connecting");
   const [submitting, setSubmitting] = useState(false);
-  const [openModal, setOpenModal] = useState<"rules" | "leaderboard" | "sound" | null>(null);
+  const [openModal, setOpenModal] = useState<"daily" | "rules" | "leaderboard" | "sound" | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [onlineModalOpen, setOnlineModalOpen] = useState(false);
   const [onlineDisplayName, setOnlineDisplayName] = useState("");
   const [onlineLoading, setOnlineLoading] = useState(false);
+  const [onlineNotice, setOnlineNotice] = useState("");
+  const [account, setAccount] = useState<{ email: string | null; isAnonymous: boolean }>({ email: null, isAnonymous: true });
+  const [playerHub, setPlayerHub] = useState<PlayerHub | null>(null);
+  const [playerHubLoading, setPlayerHubLoading] = useState(false);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [initialInviteCode, setInitialInviteCode] = useState("");
   const [onlineState, setOnlineState] = useState<OnlineMatchState | null>(null);
@@ -206,6 +229,8 @@ export function GamePrototype() {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [localMode, setLocalMode] = useState<"practice" | "daily" | "bot">("practice");
   const [dailyBest, setDailyBest] = useState(0);
+  const [dailyData, setDailyData] = useState<DailyChallengeData | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const [lastRejectedWords, setLastRejectedWords] = useState<string[]>([]);
   const [pendingWordCheck, setPendingWordCheck] = useState<PendingWordCheck>({ key: "", status: "idle" });
   const [botRack, setBotRack] = useState<RackTile[]>([]);
@@ -217,6 +242,7 @@ export function GamePrototype() {
   const moveFeedbackSequence = useRef(0);
   const draftChannelRef = useRef<RealtimeChannel | null>(null);
   const rivalDraftTimeoutRef = useRef<number | null>(null);
+  const expiringVersionRef = useRef<number | null>(null);
 
   useEffect(() => {
     void loadLocalDictionary().catch(() => undefined);
@@ -279,7 +305,9 @@ export function GamePrototype() {
     if (nextState.match.status !== "waiting") setOnlineModalOpen(false);
 
     if (nextState.match.status === "waiting") {
-      setNotice("Партија је направљена. Пошаљи позивни код другом играчу.");
+      setNotice(nextState.match.match_source === "quick"
+        ? "Тражимо противника за брзу игру."
+        : "Партија је направљена. Пошаљи позивни код другом играчу.");
     } else if (nextState.match.status === "completed" || nextState.match.status === "abandoned") {
       setResultModalOpen(true);
       setNotice(
@@ -340,6 +368,10 @@ export function GamePrototype() {
         if (session?.access_token) await supabase.realtime.setAuth(session.access_token);
         if (active) {
           setUserId(session?.user.id ?? null);
+          setAccount({
+            email: session?.user.email ?? null,
+            isAnonymous: session?.user.is_anonymous ?? !session?.user.email,
+          });
           setBackendStatus("ready");
           const requestedCode = new URLSearchParams(window.location.search).get("match")?.toUpperCase() ?? "";
           if (/^[A-F0-9]{6}$/.test(requestedCode)) {
@@ -357,6 +389,19 @@ export function GamePrototype() {
           } else if (savedMatchId) {
             window.localStorage.removeItem("skrabaj-active-match");
           }
+          const { data: hubData } = await supabase.rpc("get_player_hub");
+          if (active && hubData) {
+            const nextHub = hubData as PlayerHub;
+            setPlayerHub(nextHub);
+            const savedName = window.localStorage.getItem("skrabaj-display-name");
+            setOnlineDisplayName(savedName || nextHub.profile?.display_name || "");
+          }
+          const { data: dailyResult } = await supabase.rpc("get_daily_challenge");
+          if (active && dailyResult) {
+            const nextDaily = dailyResult as DailyChallengeData;
+            setDailyData(nextDaily);
+            setDailyBest((current) => Math.max(current, nextDaily.best));
+          }
         }
       } catch {
         if (active) {
@@ -367,8 +412,15 @@ export function GamePrototype() {
     }
 
     void connectLocalBackend();
+    const { data: authListener } = supabase?.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setUserId(session?.user.id ?? null);
+      setAccount({ email: session?.user.email ?? null, isAnonymous: session?.user.is_anonymous ?? !session?.user.email });
+      if (session?.access_token) void supabase?.realtime.setAuth(session.access_token);
+    }) ?? { data: { subscription: null } };
     return () => {
       active = false;
+      authListener.subscription?.unsubscribe();
     };
   }, []);
 
@@ -521,6 +573,30 @@ export function GamePrototype() {
   const canPlayOnline = Boolean(
     isOnline && onlineState?.match.status === "active" && onlineState.match.current_player_id === userId,
   );
+  const isTimedMatch = onlineState?.match.game_mode === "quick";
+  const remainingSeconds = isTimedMatch && onlineState?.match.turn_deadline
+    ? Math.max(0, Math.ceil((new Date(onlineState.match.turn_deadline).getTime() - clockNow) / 1000))
+    : null;
+
+  useEffect(() => {
+    if (!isTimedMatch || onlineState?.match.status !== "active" || !onlineState.match.turn_deadline) return;
+    const timer = window.setInterval(() => setClockNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [isTimedMatch, onlineState?.match.status, onlineState?.match.turn_deadline]);
+
+  useEffect(() => {
+    if (!supabase || !onlineState || remainingSeconds !== 0 || onlineState.match.status !== "active") return;
+    if (expiringVersionRef.current === onlineState.match.version) return;
+    expiringVersionRef.current = onlineState.match.version;
+    void supabase.rpc("expire_match_turn", { p_match_id: onlineState.match.id }).then(({ data, error }) => {
+      if (error) {
+        expiringVersionRef.current = null;
+        return;
+      }
+      applyOnlineMatchState(data as OnlineMatchState);
+      setNotice("Време за потез је истекло — потез је аутоматски прескочен.");
+    });
+  }, [applyOnlineMatchState, onlineState, remainingSeconds]);
 
   useEffect(() => {
     if (!isOnline || !canPlayOnline || !userId || !draftChannelReady) return;
@@ -663,6 +739,18 @@ export function GamePrototype() {
     setNotice("Дневни изазов је почео. Имаш пет потеза са истим словима као и сви данас.");
   }
 
+  async function shareDailyResult() {
+    const score = Math.max(dailyBest, dailyData?.best ?? 0, localMode === "daily" ? game.score : 0);
+    const streak = dailyData?.streak ?? 0;
+    const text = `Шкрабај · Дневни изазов\n${score} поена · низ ${streak} дана\n${window.location.origin}`;
+    if (navigator.share) {
+      await navigator.share({ title: "Шкрабај · Дневни изазов", text });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    setNotice("Резултат је копиран — спреман је за дељење.");
+  }
+
   function startBotGame() {
     const session = buildBotGame();
     window.localStorage.removeItem("skrabaj-active-match");
@@ -746,12 +834,35 @@ export function GamePrototype() {
     setLastRejectedWords([]);
   }
 
-  function openOnlineLobby() {
-    setOnlineDisplayName((current) => current || window.localStorage.getItem("skrabaj-display-name") || "");
-    setOnlineModalOpen(true);
+  async function refreshPlayerHub() {
+    if (!supabase || backendStatus !== "ready") return;
+    setPlayerHubLoading(true);
+    const [{ data: hubData }, { data: dailyResult }] = await Promise.all([
+      supabase.rpc("get_player_hub"),
+      supabase.rpc("get_daily_challenge"),
+    ]);
+    if (hubData) setPlayerHub(hubData as PlayerHub);
+    if (dailyResult) {
+      const nextDaily = dailyResult as DailyChallengeData;
+      setDailyData(nextDaily);
+      setDailyBest((current) => Math.max(current, nextDaily.best));
+    }
+    setPlayerHubLoading(false);
   }
 
-  async function createOnlineMatch(displayName: string) {
+  function openOnlineLobby() {
+    setOnlineDisplayName((current) => current || window.localStorage.getItem("skrabaj-display-name") || "");
+    setOnlineNotice(backendStatus === "offline" ? "Онлајн сервис тренутно није доступан." : "");
+    setOnlineModalOpen(true);
+    void refreshPlayerHub();
+  }
+
+  function openDailyChallenge() {
+    setOpenModal("daily");
+    void refreshPlayerHub();
+  }
+
+  async function createOnlineMatch(displayName: string, gameMode: GameMode) {
     if (!supabase || backendStatus !== "ready") {
       setNotice("Потребна је веза са сервисом за онлајн партију.");
       return;
@@ -760,6 +871,7 @@ export function GamePrototype() {
     setOnlineLoading(true);
     const { data, error } = await supabase.rpc("create_match", {
       p_display_name: displayName,
+      p_game_mode: gameMode,
     });
     if (error || !data?.[0]) {
       setNotice(`Партија није направљена: ${error?.message ?? "непозната грешка"}`);
@@ -774,6 +886,91 @@ export function GamePrototype() {
       setNotice(`Партија није учитана: ${stateError.message}`);
     } else {
       applyOnlineMatchState(state as OnlineMatchState);
+    }
+    setOnlineLoading(false);
+  }
+
+  async function findQuickMatch(displayName: string) {
+    if (!supabase || backendStatus !== "ready") {
+      setOnlineNotice("Потребна је веза са сервисом за брзу игру.");
+      return;
+    }
+    window.localStorage.setItem("skrabaj-display-name", displayName);
+    setOnlineLoading(true);
+    setOnlineNotice("");
+    const { data, error } = await supabase.rpc("find_quick_match", {
+      p_display_name: displayName,
+      p_game_mode: "quick",
+    });
+    if (error || !data) {
+      setOnlineNotice(`Претрага није покренута: ${error?.message ?? "непозната грешка"}`);
+    } else {
+      const next = data as OnlineMatchState;
+      setActiveMatchId(next.match.id);
+      applyOnlineMatchState(next);
+    }
+    setOnlineLoading(false);
+  }
+
+  async function cancelQuickMatch() {
+    if (!supabase || !onlineState || onlineState.match.match_source !== "quick") return;
+    setOnlineLoading(true);
+    const { error } = await supabase.rpc("cancel_quick_match", { p_match_id: onlineState.match.id });
+    if (error) {
+      setOnlineNotice(`Претрага није отказана: ${error.message}`);
+    } else {
+      window.localStorage.removeItem("skrabaj-active-match");
+      setActiveMatchId(null);
+      setOnlineState(null);
+      setOnlineNotice("Претрага је отказана.");
+    }
+    setOnlineLoading(false);
+  }
+
+  function resumeOnlineMatch(matchId: string) {
+    setActiveMatchId(matchId);
+    setOnlineModalOpen(false);
+  }
+
+  async function authenticateWithGoogle() {
+    if (!supabase) return;
+    setOnlineLoading(true);
+    setOnlineNotice("");
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const result = account.isAnonymous
+      ? await supabase.auth.linkIdentity({ provider: "google", options: { redirectTo } })
+      : await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
+    if (result.error) setOnlineNotice(`Google пријава није успела: ${result.error.message}`);
+    setOnlineLoading(false);
+  }
+
+  async function authenticateWithEmail(email: string, password: string, intent: "login" | "upgrade") {
+    if (!supabase) return;
+    setOnlineLoading(true);
+    setOnlineNotice("");
+    const result = intent === "upgrade"
+      ? await supabase.auth.updateUser({ email, password })
+      : await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) {
+      setOnlineNotice(`Налог није повезан: ${result.error.message}`);
+    } else {
+      setOnlineNotice(intent === "upgrade" ? "Налог је направљен, а досадашњи напредак је сачуван." : "Успешно си пријављен.");
+      await refreshPlayerHub();
+    }
+    setOnlineLoading(false);
+  }
+
+  async function signOutAccount() {
+    if (!supabase) return;
+    setOnlineLoading(true);
+    await supabase.auth.signOut();
+    const { data, error } = await supabase.auth.signInAnonymously({ options: { data: { display_name: "Локални играч" } } });
+    if (error) setOnlineNotice(`Одјава није завршена: ${error.message}`);
+    else {
+      setUserId(data.user?.id ?? null);
+      setAccount({ email: null, isAnonymous: true });
+      setPlayerHub(null);
+      setOnlineNotice("Одјављен си. Можеш да наставиш као гост.");
     }
     setOnlineLoading(false);
   }
@@ -1204,6 +1401,11 @@ export function GamePrototype() {
       const finalScore = game.score + result.score;
       window.localStorage.setItem(`skrabaj-daily-${dailySeed()}`, String(Math.max(dailyBest, finalScore)));
       setDailyBest((current) => Math.max(current, finalScore));
+      if (supabase && backendStatus === "ready") {
+        void supabase.rpc("submit_daily_challenge", { p_score: finalScore, p_move_count: MAX_ROUNDS }).then(({ data }) => {
+          if (data) setDailyData(data as DailyChallengeData);
+        });
+      }
     }
     resetSelection();
     const localFinished = localMode !== "bot" && game.turn >= MAX_ROUNDS;
@@ -1235,7 +1437,7 @@ export function GamePrototype() {
             <span className="status-dot" aria-hidden="true" />
             <span>Играј</span>
           </button>
-          <button aria-label="Дневни изазов" className="nav-button nav-button--icon" onClick={startDailyChallenge} title="Дневни изазов" type="button">
+          <button aria-label="Дневни изазов" className="nav-button nav-button--icon" onClick={openDailyChallenge} title="Дневни изазов" type="button">
             <GameIcon name="calendar" /><span className="desktop-label">Данас</span>
           </button>
           <button aria-label="Табела" className="nav-button nav-button--icon" onClick={openLeaderboard} title="Табела" type="button">
@@ -1273,7 +1475,7 @@ export function GamePrototype() {
         <section className={`match-banner match-banner--${onlineState.match.status}`}>
           <span>
             <small>{onlineState.match.status === "waiting" ? "ЧЕКАМО РИВАЛА" : "ОНЛАЈН ПАРТИЈА"}</small>
-            <strong>Код {onlineState.match.invite_code}</strong>
+            <strong>{onlineState.match.match_source === "quick" ? "Брза игра" : `Код ${onlineState.match.invite_code}`}</strong>
           </span>
           <p>
             {onlineState.match.status === "waiting"
@@ -1306,6 +1508,11 @@ export function GamePrototype() {
               return <i className={state} key={round} />;
             })}
           </div>
+          {remainingSeconds !== null && (
+            <div className={`turn-clock ${remainingSeconds <= 10 ? "turn-clock--urgent" : ""}`} aria-label={`Преостало време ${remainingSeconds} секунди`}>
+              <GameIcon name="clock" /><b>0:{String(remainingSeconds).padStart(2, "0")}</b>
+            </div>
+          )}
         </div>
         <div className={`player-card ${opponentIsActive ? "active-player" : ""} ${opponent ? "" : "future-player"}`}>
           <span className="avatar">{localMode === "bot" ? "Б" : opponent ? "РИ" : "?"}</span>
@@ -1539,6 +1746,19 @@ export function GamePrototype() {
         </div>
       )}
       {openModal === "rules" && <RulesModal onClose={() => setOpenModal(null)} />}
+      {openModal === "daily" && (
+        <DailyChallengeModal
+          currentUserId={userId}
+          data={dailyData}
+          loading={playerHubLoading}
+          onClose={() => setOpenModal(null)}
+          onPlay={() => {
+            setOpenModal(null);
+            startDailyChallenge();
+          }}
+          onShare={shareDailyResult}
+        />
+      )}
       {openModal === "leaderboard" && (
         <LeaderboardModal
           currentUserId={userId}
@@ -1558,13 +1778,28 @@ export function GamePrototype() {
       )}
       {onlineModalOpen && (
         <OnlineGameModal
-          activeCode={onlineState?.match.status === "waiting" ? onlineState.match.invite_code : null}
+          account={account}
+          activeMatch={onlineState && (onlineState.match.status === "waiting" || onlineState.match.status === "active") ? {
+            code: onlineState.match.invite_code,
+            mode: onlineState.match.game_mode,
+            source: onlineState.match.match_source,
+            status: onlineState.match.status,
+          } : null}
           displayName={onlineDisplayName}
+          hub={playerHub}
+          hubLoading={playerHubLoading}
           loading={onlineLoading}
+          notice={onlineNotice}
+          onCancelQuickMatch={cancelQuickMatch}
           onClose={() => setOnlineModalOpen(false)}
           onCreate={createOnlineMatch}
           onDisplayNameChange={setOnlineDisplayName}
+          onEmailAuth={authenticateWithEmail}
+          onGoogleAuth={authenticateWithGoogle}
           onJoin={joinOnlineMatch}
+          onQuickMatch={findQuickMatch}
+          onResume={resumeOnlineMatch}
+          onSignOut={signOutAccount}
           initialInviteCode={initialInviteCode}
         />
       )}
@@ -1576,8 +1811,10 @@ export function GamePrototype() {
           onNewGame={isOnline ? rematchOnline : localMode === "bot" ? startBotGame : localMode === "daily" ? startDailyChallenge : startNewGame}
           onOpenLeaderboard={() => {
             setResultModalOpen(false);
-            void openLeaderboard();
+            if (localMode === "daily") openDailyChallenge();
+            else void openLeaderboard();
           }}
+          onShare={localMode === "daily" ? shareDailyResult : undefined}
           opponentName={localMode === "bot" ? "Букварко" : opponent?.display_name}
           opponentScore={localMode === "bot" ? botScore : opponent?.score}
           playerName={viewer?.display_name ?? "Играч"}

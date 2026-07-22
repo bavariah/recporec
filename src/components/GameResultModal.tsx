@@ -11,6 +11,7 @@ interface GameResultModalProps {
   onClose: () => void;
   onNewGame: () => void;
   onOpenLeaderboard: () => void;
+  onShare?: () => void;
   opponentName?: string;
   opponentScore?: number;
   playerName: string;
@@ -50,6 +51,7 @@ export function GameResultModal({
   onClose,
   onNewGame,
   onOpenLeaderboard,
+  onShare,
   opponentName,
   opponentScore,
   playerName,
@@ -87,6 +89,7 @@ export function GameResultModal({
         <button className="primary-action modal-action result-rematch" onClick={onNewGame} type="button">
           <span>{actionLabel}</span><b>→</b>
         </button>
+        {onShare && <button className="secondary-action modal-action result-share" onClick={onShare} type="button"><GameIcon name="share" /> Подели резултат</button>}
         <button className="result-table-link" onClick={onOpenLeaderboard} type="button">
           Погледај табелу
         </button>

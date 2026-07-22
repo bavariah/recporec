@@ -24,12 +24,17 @@ authoritative online turn engine remain the next deployment phase.
 - local anonymous Auth and server-side dictionary checks for submitted words;
 - visible create/join-by-code flow for two browser players;
 - shareable invites, match resume, turn notifications, resigning, and rematches;
+- quick matchmaking plus relaxed and 60-second server-timed online modes;
+- reconnect-safe turn deadlines with automatic pass when time expires;
+- email/password account upgrades, Google linking, active sessions, match history, and player stats;
+- server-saved Daily Challenge scores, daily ranking, streaks, and shareable results;
 - server-owned shuffled bag, private racks, turn/version checks, scoring, passes,
   winner recording, Realtime synchronization, and leaderboard schema.
 
-The page starts as a local practice game. Choose **Онлајн** to create a six-digit
-invite code or join another player. Four consecutive passes currently finish a
-match; this is provisional until the final game-ending rules are approved.
+The page starts as a local practice game. Choose **Играј** for a quick match,
+create a timed or relaxed six-digit invitation, resume an active game, or save
+guest progress to an account. Four consecutive passes currently finish a match;
+this is provisional until the final game-ending rules are approved.
 
 ## Run locally
 
