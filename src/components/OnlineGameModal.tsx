@@ -27,7 +27,6 @@ export interface PlayerHub {
 }
 
 interface OnlineGameModalProps {
-  account: { email: string | null; isAnonymous: boolean };
   activeMatch: {
     code: string;
     mode: GameMode;
@@ -44,12 +43,9 @@ interface OnlineGameModalProps {
   onClose: () => void;
   onCreate: (displayName: string, mode: GameMode) => Promise<void>;
   onDisplayNameChange: (displayName: string) => void;
-  onEmailAuth: (email: string, password: string, intent: "login" | "upgrade") => Promise<void>;
-  onGoogleAuth: () => Promise<void>;
   onJoin: (displayName: string, inviteCode: string) => Promise<void>;
   onQuickMatch: (displayName: string) => Promise<void>;
   onResume: (matchId: string) => void;
-  onSignOut: () => Promise<void>;
 }
 
 function modeLabel(mode: GameMode) {
@@ -66,7 +62,6 @@ function relativeDate(value: string) {
 }
 
 export function OnlineGameModal({
-  account,
   activeMatch,
   displayName,
   hub,
@@ -78,21 +73,13 @@ export function OnlineGameModal({
   onClose,
   onCreate,
   onDisplayNameChange,
-  onEmailAuth,
-  onGoogleAuth,
   onJoin,
   onQuickMatch,
   onResume,
-  onSignOut,
 }: OnlineGameModalProps) {
   const [inviteCode, setInviteCode] = useState(initialInviteCode);
   const [inviteMode, setInviteMode] = useState<GameMode>("quick");
   const [copied, setCopied] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [existingAccount, setExistingAccount] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
   const validName = displayName.trim().length >= 2;
 
   async function copyInviteCode() {
@@ -145,6 +132,12 @@ export function OnlineGameModal({
       <div className="play-hub">
         {notice && <p className="play-hub__notice">{notice}</p>}
 
+        <div className="play-hub__lead">
+          <small>ИЗАБЕРИ НАЧИН ИГРЕ</small>
+          <strong>Како желиш да играш?</strong>
+          <p>Пронађи противника одмах или покрени приватну партију са пријатељем.</p>
+        </div>
+
         <label className="online-identity player-identity">
           <span className="player-identity__avatar"><GameIcon name="user" /></span>
           <span className="player-identity__field">
@@ -157,8 +150,27 @@ export function OnlineGameModal({
 
         <section className="quick-play-card">
           <span className="quick-play-card__icon"><GameIcon name="clock" /></span>
-          <div><small>БРЗА ИГРА</small><strong>Пронађи противника</strong><p>60 секунди по потезу · аутоматски прескок када време истекне</p></div>
-          <button className="primary-action" disabled={loading || !validName} onClick={() => onQuickMatch(displayName.trim())} type="button">{loading ? "Тражимо…" : "ИГРАЈ САДА"}<span>→</span></button>
+          <div><small>ОПЦИЈА 1 · БРЗА ИГРА</small><strong>Пронађи противника</strong><p>Насумичан играч · 60 секунди по потезу · аутоматски прескок</p></div>
+          <button className="primary-action" disabled={loading || !validName} onClick={() => onQuickMatch(displayName.trim())} type="button">{loading ? "ТРАЖИМО…" : "ПРОНАЂИ ИГРАЧА"}<span>→</span></button>
+        </section>
+
+        <section className="invite-section">
+          <div className="play-hub__section-title"><span><b>2</b><GameIcon name="users" /> ПОЗОВИ ПРИЈАТЕЉА</span></div>
+          <p className="play-option-copy">Изабери темпо, направи приватни код и пошаљи га пријатељу.</p>
+          <div className="mode-picker" role="radiogroup" aria-label="Режим партије">
+            <button aria-checked={inviteMode === "quick"} className={inviteMode === "quick" ? "selected" : ""} onClick={() => setInviteMode("quick")} role="radio" type="button"><GameIcon name="clock" /><span><strong>Брза игра</strong><small>60 сек по потезу</small></span></button>
+            <button aria-checked={inviteMode === "relaxed"} className={inviteMode === "relaxed" ? "selected" : ""} onClick={() => setInviteMode("relaxed")} role="radio" type="button"><GameIcon name="history" /><span><strong>Опуштена</strong><small>Без ограничења</small></span></button>
+          </div>
+          <button className="secondary-action modal-action create-invite" disabled={loading || !validName} onClick={() => onCreate(displayName.trim(), inviteMode)} type="button">Направи позивни код</button>
+        </section>
+
+        <section className="join-section">
+          <div className="play-hub__section-title"><span><b>3</b><GameIcon name="target" /> ИМАШ ПОЗИВНИ КОД?</span></div>
+          <p className="play-option-copy">Унеси код који ти је послао пријатељ и придружи се партији.</p>
+          <div className="join-row">
+            <input aria-label="Позивни код" autoCapitalize="characters" autoComplete="off" className="invite-input" inputMode="text" maxLength={6} onChange={(event) => setInviteCode(event.target.value.toUpperCase().replace(/[^A-F0-9]/g, ""))} placeholder="ПОЗИВНИ КОД" value={inviteCode} />
+            <button className="secondary-action" disabled={loading || !validName || inviteCode.length !== 6} onClick={() => onJoin(displayName.trim(), inviteCode)} type="button">УЂИ</button>
+          </div>
         </section>
 
         {(hubLoading || (hub?.open_matches.length ?? 0) > 0) && (
@@ -172,42 +184,6 @@ export function OnlineGameModal({
             ))}
           </section>
         )}
-
-        <section className="invite-section">
-          <div className="play-hub__section-title"><span><GameIcon name="users" /> ИГРАЈ СА ПРИЈАТЕЉЕМ</span></div>
-          <div className="mode-picker" role="radiogroup" aria-label="Режим партије">
-            <button aria-checked={inviteMode === "quick"} className={inviteMode === "quick" ? "selected" : ""} onClick={() => setInviteMode("quick")} role="radio" type="button"><GameIcon name="clock" /><span><strong>Брза игра</strong><small>60 сек по потезу</small></span></button>
-            <button aria-checked={inviteMode === "relaxed"} className={inviteMode === "relaxed" ? "selected" : ""} onClick={() => setInviteMode("relaxed")} role="radio" type="button"><GameIcon name="history" /><span><strong>Опуштена</strong><small>Без ограничења</small></span></button>
-          </div>
-          <button className="secondary-action modal-action create-invite" disabled={loading || !validName} onClick={() => onCreate(displayName.trim(), inviteMode)} type="button">Направи позивни код</button>
-          <div className="join-row">
-            <input aria-label="Позивни код" autoCapitalize="characters" autoComplete="off" className="invite-input" inputMode="text" maxLength={6} onChange={(event) => setInviteCode(event.target.value.toUpperCase().replace(/[^A-F0-9]/g, ""))} placeholder="ПОЗИВНИ КОД" value={inviteCode} />
-            <button className="secondary-action" disabled={loading || !validName || inviteCode.length !== 6} onClick={() => onJoin(displayName.trim(), inviteCode)} type="button">УЂИ</button>
-          </div>
-        </section>
-
-        <section className="account-section">
-          <button className="account-section__toggle" onClick={() => setAccountOpen((current) => !current)} type="button">
-            <span><GameIcon name="user" /><span><strong>{account.isAnonymous ? "Сачувај напредак" : hub?.profile?.display_name || account.email}</strong><small>{account.isAnonymous ? "Направи налог за историју и резултате" : `${hub?.stats.games ?? 0} партија · ${hub?.stats.wins ?? 0} победа`}</small></span></span><b>{accountOpen ? "−" : "+"}</b>
-          </button>
-          {accountOpen && (account.isAnonymous ? (
-            <div className="account-form">
-              <p>Налог чува постојеће партије, име и резултате са овог уређаја.</p>
-              <button className="google-action" disabled={loading} onClick={onGoogleAuth} type="button"><b>G</b> Настави преко Google-а</button>
-              <div className="online-divider"><span>или имејлом</span></div>
-              <input autoComplete="email" onChange={(event) => setEmail(event.target.value)} placeholder="Имејл адреса" type="email" value={email} />
-              <input autoComplete={existingAccount ? "current-password" : "new-password"} minLength={8} onChange={(event) => setPassword(event.target.value)} placeholder="Лозинка · најмање 8 знакова" type="password" value={password} />
-              <button className="primary-action modal-action" disabled={loading || !email.includes("@") || password.length < 8} onClick={() => onEmailAuth(email, password, existingAccount ? "login" : "upgrade")} type="button">{existingAccount ? "ПРИЈАВИ СЕ" : "НАПРАВИ НАЛОГ"}</button>
-              <button className="account-switch" onClick={() => setExistingAccount((current) => !current)} type="button">{existingAccount ? "Немам налог" : "Већ имам налог"}</button>
-            </div>
-          ) : (
-            <div className="account-summary">
-              <div><span>ПАРТИЈЕ<strong>{hub?.stats.games ?? 0}</strong></span><span>ПОБЕДЕ<strong>{hub?.stats.wins ?? 0}</strong></span><span>ПОЕНИ<strong>{hub?.stats.points ?? 0}</strong></span></div>
-              <p>{account.email}</p>
-              <button className="secondary-action" onClick={onSignOut} type="button">Одјави се</button>
-            </div>
-          ))}
-        </section>
 
         {(hub?.recent_matches.length ?? 0) > 0 && (
           <section className="recent-section">

@@ -35,6 +35,7 @@ import { RulesModal } from "@/components/RulesModal";
 import { SoundSettingsModal } from "@/components/SoundSettingsModal";
 import { GameIcon } from "@/components/GameIcon";
 import { DailyChallengeModal } from "@/components/DailyChallengeModal";
+import { AccountModal } from "@/components/AccountModal";
 import { playGameSound, type SoundPalette } from "@/game/sound";
 import { checkLocalWords, loadLocalDictionary } from "@/lib/localDictionary";
 
@@ -211,6 +212,7 @@ export function GamePrototype() {
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [onlineModalOpen, setOnlineModalOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [onlineDisplayName, setOnlineDisplayName] = useState("");
   const [onlineLoading, setOnlineLoading] = useState(false);
   const [onlineNotice, setOnlineNotice] = useState("");
@@ -853,7 +855,16 @@ export function GamePrototype() {
   function openOnlineLobby() {
     setOnlineDisplayName((current) => current || window.localStorage.getItem("skrabaj-display-name") || "");
     setOnlineNotice(backendStatus === "offline" ? "Онлајн сервис тренутно није доступан." : "");
+    setAccountModalOpen(false);
     setOnlineModalOpen(true);
+    void refreshPlayerHub();
+  }
+
+  function openAccount() {
+    setOnlineNotice(backendStatus === "offline" ? "Налог тренутно није доступан без везе са сервисом." : "");
+    setOnlineModalOpen(false);
+    setOpenModal(null);
+    setAccountModalOpen(true);
     void refreshPlayerHub();
   }
 
@@ -1437,6 +1448,16 @@ export function GamePrototype() {
             <span className="status-dot" aria-hidden="true" />
             <span>Играј</span>
           </button>
+          <button
+            aria-label={account.isAnonymous ? "Пријава и чување напретка" : "Мој налог"}
+            className={`nav-button nav-button--icon nav-button--account ${account.isAnonymous ? "is-guest" : "is-signed-in"}`}
+            onClick={openAccount}
+            title={account.isAnonymous ? "Пријави се и сачувај напредак" : "Мој налог"}
+            type="button"
+          >
+            <span className="account-nav-icon"><GameIcon name="user" /><b>{account.isAnonymous ? "+" : "✓"}</b></span>
+            <span className="desktop-label">{account.isAnonymous ? "Пријава" : "Налог"}</span>
+          </button>
           <button aria-label="Дневни изазов" className="nav-button nav-button--icon" onClick={openDailyChallenge} title="Дневни изазов" type="button">
             <GameIcon name="calendar" /><span className="desktop-label">Данас</span>
           </button>
@@ -1778,7 +1799,6 @@ export function GamePrototype() {
       )}
       {onlineModalOpen && (
         <OnlineGameModal
-          account={account}
           activeMatch={onlineState && (onlineState.match.status === "waiting" || onlineState.match.status === "active") ? {
             code: onlineState.match.invite_code,
             mode: onlineState.match.game_mode,
@@ -1794,13 +1814,22 @@ export function GamePrototype() {
           onClose={() => setOnlineModalOpen(false)}
           onCreate={createOnlineMatch}
           onDisplayNameChange={setOnlineDisplayName}
-          onEmailAuth={authenticateWithEmail}
-          onGoogleAuth={authenticateWithGoogle}
           onJoin={joinOnlineMatch}
           onQuickMatch={findQuickMatch}
           onResume={resumeOnlineMatch}
-          onSignOut={signOutAccount}
           initialInviteCode={initialInviteCode}
+        />
+      )}
+      {accountModalOpen && (
+        <AccountModal
+          account={account}
+          hub={playerHub}
+          loading={onlineLoading || playerHubLoading}
+          notice={onlineNotice}
+          onClose={() => setAccountModalOpen(false)}
+          onEmailAuth={authenticateWithEmail}
+          onGoogleAuth={authenticateWithGoogle}
+          onSignOut={signOutAccount}
         />
       )}
       {resultModalOpen && matchComplete && (

@@ -11,7 +11,7 @@ interface AppModalProps {
   onClose: () => void;
   position?: "center" | "upper";
   title: string;
-  variant?: "default" | "leaderboard" | "online" | "result" | "rules" | "sound";
+  variant?: "account" | "default" | "leaderboard" | "online" | "result" | "rules" | "sound";
   wide?: boolean;
 }
 
