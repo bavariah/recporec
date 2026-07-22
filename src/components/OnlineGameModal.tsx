@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { AppModal } from "@/components/AppModal";
 import { GameIcon } from "@/components/GameIcon";
+import { PlayerAvatar, type PlayerProfileAppearance } from "@/components/PlayerAvatar";
 
 export type GameMode = "quick" | "relaxed";
 
 const QUICK_MATCHMAKING_VISIBLE = false;
 
-export interface PlayerHubMatch {
+export interface PlayerHubMatch extends PlayerProfileAppearance {
   game_mode: GameMode;
   invite_code?: string;
   match_id: string;
@@ -23,7 +24,7 @@ export interface PlayerHubMatch {
 
 export interface PlayerHub {
   open_matches: PlayerHubMatch[];
-  profile: { display_name: string; id: string } | null;
+  profile: ({ display_name: string; id: string } & PlayerProfileAppearance) | null;
   recent_matches: PlayerHubMatch[];
   stats: { average: number; games: number; points: number; wins: number };
 }
@@ -141,7 +142,12 @@ export function OnlineGameModal({
         </div>
 
         <label className="online-identity player-identity">
-          <span className="player-identity__avatar"><GameIcon name="user" /></span>
+          <PlayerAvatar
+            avatar_key={hub?.profile?.avatar_key}
+            avatar_path={hub?.profile?.avatar_path}
+            className="player-identity__avatar"
+            displayName={displayName}
+          />
           <span className="player-identity__field">
             <small>ИМЕ У ИГРИ</small>
             <input autoComplete="nickname" maxLength={24} minLength={2} onChange={(event) => onDisplayNameChange(event.target.value)} placeholder="Како да те види противник?" value={displayName} />
@@ -182,6 +188,7 @@ export function OnlineGameModal({
             <div className="play-hub__section-title"><span><GameIcon name="history" /> ТВОЈЕ ПАРТИЈЕ</span></div>
             {hubLoading ? <span className="session-loading">Учитавање…</span> : hub?.open_matches.map((match) => (
               <button className="session-row" key={match.match_id} onClick={() => onResume(match.match_id)} type="button">
+                <PlayerAvatar avatar_key={match.avatar_key} avatar_path={match.avatar_path} displayName={match.opponent_name} />
                 <span><strong>{match.opponent_name || (match.status === "waiting" ? "Чекамо противника" : "Онлајн партија")}</strong><small>{modeLabel(match.game_mode)} · {relativeDate(match.updated_at)}</small></span>
                 <b>{match.status === "active" ? "НАСТАВИ" : "ОТВОРИ"} →</b>
               </button>
@@ -192,7 +199,7 @@ export function OnlineGameModal({
         {(hub?.recent_matches.length ?? 0) > 0 && (
           <section className="recent-section">
             <div className="play-hub__section-title"><span>ПОСЛЕДЊЕ ПАРТИЈЕ</span></div>
-            {hub!.recent_matches.slice(0, 4).map((match) => <div className="recent-row" key={match.match_id}><span><strong>{match.opponent_name || "Противник"}</strong><small>{modeLabel(match.game_mode)} · {relativeDate(match.updated_at)}</small></span><b className={`result-${match.result}`}>{match.result === "win" ? "ПОБЕДА" : match.result === "loss" ? "ПОРАЗ" : "НЕРЕШЕНО"}</b><em>{match.my_score} : {match.opponent_score ?? 0}</em></div>)}
+            {hub!.recent_matches.slice(0, 4).map((match) => <div className="recent-row" key={match.match_id}><PlayerAvatar avatar_key={match.avatar_key} avatar_path={match.avatar_path} displayName={match.opponent_name} /><span><strong>{match.opponent_name || "Противник"}</strong><small>{modeLabel(match.game_mode)} · {relativeDate(match.updated_at)}</small></span><b className={`result-${match.result}`}>{match.result === "win" ? "ПОБЕДА" : match.result === "loss" ? "ПОРАЗ" : "НЕРЕШЕНО"}</b><em>{match.my_score} : {match.opponent_score ?? 0}</em></div>)}
           </section>
         )}
       </div>

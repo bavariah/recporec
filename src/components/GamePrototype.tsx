@@ -35,7 +35,8 @@ import { RulesModal } from "@/components/RulesModal";
 import { SoundSettingsModal } from "@/components/SoundSettingsModal";
 import { GameIcon } from "@/components/GameIcon";
 import { DailyChallengeModal } from "@/components/DailyChallengeModal";
-import { AccountModal } from "@/components/AccountModal";
+import { AccountModal, type ProfileUpdateInput } from "@/components/AccountModal";
+import { PlayerAvatar, type PlayerProfileAppearance } from "@/components/PlayerAvatar";
 import { playGameSound, type SoundPalette } from "@/game/sound";
 import { checkLocalWords, loadLocalDictionary } from "@/lib/localDictionary";
 
@@ -60,7 +61,7 @@ interface GameState {
   turn: number;
 }
 
-interface OnlinePlayer {
+interface OnlinePlayer extends PlayerProfileAppearance {
   user_id: string;
   seat: number;
   score: number;
@@ -114,7 +115,7 @@ interface OpenMatch {
 interface DailyChallengeData {
   best: number;
   date: string;
-  entries: Array<{ display_name: string; rank: number; score: number; user_id: string }>;
+  entries: Array<{ display_name: string; rank: number; score: number; user_id: string } & PlayerProfileAppearance>;
   rank: number | null;
   streak: number;
 }
@@ -966,6 +967,60 @@ export function GamePrototype() {
     return !result.error;
   }
 
+  async function savePlayerProfile({ avatarFile, avatarKey, avatarPath, displayName }: ProfileUpdateInput) {
+    if (!supabase || !userId || account.isAnonymous) {
+      setOnlineNotice("Пријави се да би сачувао профил.");
+      return null;
+    }
+
+    setOnlineLoading(true);
+    setOnlineNotice("");
+    let nextAvatarPath = avatarPath;
+    let uploadedPath: string | null = null;
+
+    if (avatarFile) {
+      const extension = avatarFile.type === "image/png" ? "png" : avatarFile.type === "image/webp" ? "webp" : "jpg";
+      uploadedPath = `${userId}/avatar-${Date.now()}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from("profile-avatars")
+        .upload(uploadedPath, avatarFile, { cacheControl: "3600", contentType: avatarFile.type, upsert: false });
+      if (uploadError) {
+        setOnlineNotice(`Слика није додата: ${uploadError.message}`);
+        setOnlineLoading(false);
+        return null;
+      }
+      nextAvatarPath = uploadedPath;
+    }
+
+    const previousAvatarPath = playerHub?.profile?.avatar_path || null;
+    const { error } = await supabase.rpc("update_player_profile", {
+      p_avatar_key: avatarKey,
+      p_avatar_path: nextAvatarPath,
+      p_display_name: displayName,
+    });
+
+    if (error) {
+      if (uploadedPath) await supabase.storage.from("profile-avatars").remove([uploadedPath]);
+      setOnlineNotice(`Профил није сачуван: ${error.message}`);
+      setOnlineLoading(false);
+      return null;
+    }
+
+    if (previousAvatarPath && previousAvatarPath !== nextAvatarPath) {
+      await supabase.storage.from("profile-avatars").remove([previousAvatarPath]);
+    }
+    window.localStorage.setItem("skrabaj-display-name", displayName);
+    setOnlineDisplayName(displayName);
+    await refreshPlayerHub();
+    if (activeMatchId) {
+      const { data } = await supabase.rpc("get_match_state", { p_match_id: activeMatchId });
+      if (data) applyOnlineMatchState(data as OnlineMatchState);
+    }
+    setOnlineNotice("Профил је сачуван.");
+    setOnlineLoading(false);
+    return { avatarPath: nextAvatarPath };
+  }
+
   async function signOutAccount() {
     if (!supabase) return;
     setOnlineLoading(true);
@@ -1524,8 +1579,8 @@ export function GamePrototype() {
 
       <section className="match-strip" aria-label="Стање партије">
         <div className={`player-card ${playerIsActive ? "active-player" : ""}`}>
-          <span className="avatar">ТИ</span>
-          <span><small>{playerIsActive ? "НА ПОТЕЗУ" : "ИГРАЧ"}</small><strong>{viewer?.display_name ?? (localMode === "daily" ? "Дневни изазов" : "Играч")}</strong></span>
+          <PlayerAvatar avatar_key={viewer?.avatar_key ?? playerHub?.profile?.avatar_key} avatar_path={viewer?.avatar_path ?? playerHub?.profile?.avatar_path} displayName={viewer?.display_name ?? playerHub?.profile?.display_name} />
+          <span><small>{playerIsActive ? "НА ПОТЕЗУ" : "ИГРАЧ"}</small><strong>{viewer?.display_name ?? playerHub?.profile?.display_name ?? (localMode === "daily" ? "Дневни изазов" : "Играч")}</strong></span>
           <b>{game.score}</b>
         </div>
         <div className="round-indicator" aria-label={`Рунда ${currentRound} од ${MAX_ROUNDS}`}>
@@ -1548,7 +1603,7 @@ export function GamePrototype() {
           )}
         </div>
         <div className={`player-card ${opponentIsActive ? "active-player" : ""} ${opponent ? "" : "future-player"}`}>
-          <span className="avatar">{localMode === "bot" ? "Б" : opponent ? "РИ" : "?"}</span>
+          <PlayerAvatar avatar_key={opponent?.avatar_key} avatar_path={opponent?.avatar_path} displayName={localMode === "bot" ? "Букварко" : opponent?.display_name ?? "?"} />
           <span><small>{opponentIsActive ? "НА ПОТЕЗУ" : "ПРОТИВНИК"}</small><strong>{localMode === "bot" ? "Букварко" : opponent?.display_name ?? "Противник"}</strong></span>
           <b>{localMode === "bot" ? botScore : opponent?.score ?? "—"}</b>
         </div>
@@ -1846,12 +1901,14 @@ export function GamePrototype() {
       )}
       {accountModalOpen && (
         <AccountModal
+          key={userId || "guest"}
           account={account}
           hub={playerHub}
           loading={onlineLoading || playerHubLoading}
           notice={onlineNotice}
           onClose={() => setAccountModalOpen(false)}
           onEmailAuth={authenticateWithEmail}
+          onSaveProfile={savePlayerProfile}
           onSignOut={signOutAccount}
         />
       )}
@@ -1869,7 +1926,7 @@ export function GamePrototype() {
           onShare={localMode === "daily" ? shareDailyResult : undefined}
           opponentName={localMode === "bot" ? "Букварко" : opponent?.display_name}
           opponentScore={localMode === "bot" ? botScore : opponent?.score}
-          playerName={viewer?.display_name ?? "Играч"}
+          playerName={viewer?.display_name ?? playerHub?.profile?.display_name ?? "Играч"}
           playerScore={game.score}
         />
       )}

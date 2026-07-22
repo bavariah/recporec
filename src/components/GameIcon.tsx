@@ -12,6 +12,7 @@ export type GameIconName =
   | "history"
   | "medal"
   | "music"
+  | "plus"
   | "sparkles"
   | "sound"
   | "soundOff"
@@ -38,6 +39,7 @@ export function GameIcon({ name, ...props }: GameIconProps) {
     history: <><path d="M4 5v5h5"/><path d="M5.2 9A8 8 0 1 1 4.5 15"/><path d="M12 8v4l3 2"/></>,
     medal: <><circle cx="12" cy="15" r="5"/><path d="m9 10-3-7h4l2 4 2-4h4l-3 7"/><path d="m12 12 1 2 2 .3-1.5 1.5.4 2.2-1.9-1-1.9 1 .4-2.2L9 14.3l2-.3 1-2Z"/></>,
     music: <><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></>,
+    plus: <><path d="M12 5v14"/><path d="M5 12h14"/></>,
     sparkles: <><path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3Z"/><path d="m18.5 14 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3ZM5 13l.8 2.2L8 16l-2.2.8L5 19l-.8-2.2L2 16l2.2-.8L5 13Z"/></>,
     sound: <><path d="M5 10v4h3l4 3V7l-4 3H5Z"/><path d="M15 9.5a4 4 0 0 1 0 5"/><path d="M17.5 7a7 7 0 0 1 0 10"/></>,
     soundOff: <><path d="M5 10v4h3l4 3V7l-4 3H5Z"/><path d="m15 10 5 5M20 10l-5 5"/></>,

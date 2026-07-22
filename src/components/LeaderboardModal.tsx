@@ -2,8 +2,9 @@
 
 import { AppModal } from "@/components/AppModal";
 import { GameIcon } from "@/components/GameIcon";
+import { PlayerAvatar, type PlayerProfileAppearance } from "@/components/PlayerAvatar";
 
-export interface LeaderboardEntry {
+export interface LeaderboardEntry extends PlayerProfileAppearance {
   user_id: string;
   display_name: string;
   total_games: number;
@@ -51,6 +52,7 @@ export function LeaderboardModal({ currentUserId, entries, loading, onClose }: L
                 key={entry.user_id}
               >
                 <div className="podium-card__header">
+                  <PlayerAvatar avatar_key={entry.avatar_key} avatar_path={entry.avatar_path} displayName={entry.display_name} />
                   <div className="podium-card__identity">
                     <small>{index === 0 ? "ШАМПИОН" : `${index + 1}. МЕСТО`}</small>
                     <strong>{entry.display_name}{entry.user_id === currentUserId && <em>ТИ</em>}</strong>
@@ -72,6 +74,7 @@ export function LeaderboardModal({ currentUserId, entries, loading, onClose }: L
               {rest.map((entry, index) => (
                 <article className={entry.user_id === currentUserId ? "is-you" : ""} key={entry.user_id}>
                   <span>{index + 4}</span>
+                  <PlayerAvatar avatar_key={entry.avatar_key} avatar_path={entry.avatar_path} displayName={entry.display_name} />
                   <strong>{entry.display_name}{entry.user_id === currentUserId && <em>ТИ</em>}</strong>
                   <small>{entry.wins} победа · просек {Number(entry.average_points).toFixed(1)}</small>
                   <b>{entry.total_points}</b>

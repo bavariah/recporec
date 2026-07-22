@@ -2,11 +2,12 @@
 
 import { AppModal } from "@/components/AppModal";
 import { GameIcon } from "@/components/GameIcon";
+import { PlayerAvatar, type PlayerProfileAppearance } from "@/components/PlayerAvatar";
 
 interface DailyChallengeData {
   best: number;
   date: string;
-  entries: Array<{ display_name: string; rank: number; score: number; user_id: string }>;
+  entries: Array<{ display_name: string; rank: number; score: number; user_id: string } & PlayerProfileAppearance>;
   rank: number | null;
   streak: number;
 }
@@ -35,7 +36,7 @@ export function DailyChallengeModal({ currentUserId, data, loading, onClose, onP
         <section className="daily-leaderboard">
           <div><small>ДАНАШЊА ТАБЕЛА</small><b>{data?.entries.length ?? 0} играча</b></div>
           {loading ? <p>Учитавање резултата…</p> : data?.entries.length ? (
-            <ol>{data.entries.slice(0, 20).map((entry) => <li className={entry.user_id === currentUserId ? "is-you" : ""} key={entry.user_id}><b>{entry.rank}</b><span>{entry.display_name}{entry.user_id === currentUserId && <em>ТИ</em>}</span><strong>{entry.score}</strong></li>)}</ol>
+            <ol>{data.entries.slice(0, 20).map((entry) => <li className={entry.user_id === currentUserId ? "is-you" : ""} key={entry.user_id}><b>{entry.rank}</b><PlayerAvatar avatar_key={entry.avatar_key} avatar_path={entry.avatar_path} displayName={entry.display_name} /><span>{entry.display_name}{entry.user_id === currentUserId && <em>ТИ</em>}</span><strong>{entry.score}</strong></li>)}</ol>
           ) : <p>Још нема завршених изазова данас. Буди први!</p>}
         </section>
       </div>
