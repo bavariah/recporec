@@ -6,6 +6,8 @@ import { GameIcon } from "@/components/GameIcon";
 
 export type GameMode = "quick" | "relaxed";
 
+const QUICK_MATCHMAKING_VISIBLE = false;
+
 export interface PlayerHubMatch {
   game_mode: GameMode;
   invite_code?: string;
@@ -135,7 +137,7 @@ export function OnlineGameModal({
         <div className="play-hub__lead">
           <small>ИЗАБЕРИ НАЧИН ИГРЕ</small>
           <strong>Како желиш да играш?</strong>
-          <p>Пронађи противника одмах или покрени приватну партију са пријатељем.</p>
+          <p>Покрени приватну партију или се придружи пријатељу преко позивног кода.</p>
         </div>
 
         <label className="online-identity player-identity">
@@ -148,14 +150,16 @@ export function OnlineGameModal({
           <span className="player-identity__status">ПРОФИЛ</span>
         </label>
 
-        <section className="quick-play-card">
-          <span className="quick-play-card__icon"><GameIcon name="clock" /></span>
-          <div><small>ОПЦИЈА 1 · БРЗА ИГРА</small><strong>Пронађи противника</strong><p>Насумичан играч · 60 секунди по потезу · аутоматски прескок</p></div>
-          <button className="primary-action" disabled={loading || !validName} onClick={() => onQuickMatch(displayName.trim())} type="button">{loading ? "ТРАЖИМО…" : "ПРОНАЂИ ИГРАЧА"}<span>→</span></button>
-        </section>
+        {QUICK_MATCHMAKING_VISIBLE && (
+          <section className="quick-play-card">
+            <span className="quick-play-card__icon"><GameIcon name="clock" /></span>
+            <div><small>ОПЦИЈА 1 · БРЗА ИГРА</small><strong>Пронађи противника</strong><p>Насумичан играч · 60 секунди по потезу · аутоматски прескок</p></div>
+            <button className="primary-action" disabled={loading || !validName} onClick={() => onQuickMatch(displayName.trim())} type="button">{loading ? "ТРАЖИМО…" : "ПРОНАЂИ ИГРАЧА"}<span>→</span></button>
+          </section>
+        )}
 
         <section className="invite-section">
-          <div className="play-hub__section-title"><span><b>2</b><GameIcon name="users" /> ПОЗОВИ ПРИЈАТЕЉА</span></div>
+          <div className="play-hub__section-title"><span><b>1</b><GameIcon name="users" /> ПОЗОВИ ПРИЈАТЕЉА</span></div>
           <p className="play-option-copy">Изабери темпо, направи приватни код и пошаљи га пријатељу.</p>
           <div className="mode-picker" role="radiogroup" aria-label="Режим партије">
             <button aria-checked={inviteMode === "quick"} className={inviteMode === "quick" ? "selected" : ""} onClick={() => setInviteMode("quick")} role="radio" type="button"><GameIcon name="clock" /><span><strong>Брза игра</strong><small>60 сек по потезу</small></span></button>
@@ -165,7 +169,7 @@ export function OnlineGameModal({
         </section>
 
         <section className="join-section">
-          <div className="play-hub__section-title"><span><b>3</b><GameIcon name="target" /> ИМАШ ПОЗИВНИ КОД?</span></div>
+          <div className="play-hub__section-title"><span><b>2</b><GameIcon name="target" /> ИМАШ ПОЗИВНИ КОД?</span></div>
           <p className="play-option-copy">Унеси код који ти је послао пријатељ и придружи се партији.</p>
           <div className="join-row">
             <input aria-label="Позивни код" autoCapitalize="characters" autoComplete="off" className="invite-input" inputMode="text" maxLength={6} onChange={(event) => setInviteCode(event.target.value.toUpperCase().replace(/[^A-F0-9]/g, ""))} placeholder="ПОЗИВНИ КОД" value={inviteCode} />

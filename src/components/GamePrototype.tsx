@@ -65,6 +65,7 @@ interface OnlinePlayer {
   seat: number;
   score: number;
   exchange_used: boolean;
+  time_freeze_used: boolean;
   display_name: string;
 }
 
@@ -625,9 +626,13 @@ export function GamePrototype() {
     !matchComplete && ((isOnline && onlineState?.match.status === "active" && !canPlayOnline) || botThinking),
   );
   const exchangeUsed = isOnline ? (viewer?.exchange_used ?? true) : game.exchangeUsed;
+  const timeFreezeUsed = viewer?.time_freeze_used ?? true;
   const bagCount = onlineState?.bag_count ?? game.bag.length;
   const exchangeAvailable = Boolean(
     !matchComplete && playerIsActive && !botThinking && !exchangeUsed && bagCount > 0 && pendingCount === 0,
+  );
+  const timeFreezeAvailable = Boolean(
+    isOnline && isTimedMatch && canPlayOnline && !matchComplete && !timeFreezeUsed && remainingSeconds !== null && remainingSeconds > 0,
   );
   const resultKind: GameResultKind = localMode === "bot"
     ? game.score === botScore ? "draw" : game.score > botScore ? "win" : "lose"
@@ -943,32 +948,54 @@ export function GamePrototype() {
     setOnlineModalOpen(false);
   }
 
-  async function authenticateWithGoogle() {
+  async function authenticateWithGoogle(intent: "login" | "upgrade") {
     if (!supabase) return;
     setOnlineLoading(true);
     setOnlineNotice("");
     const redirectTo = `${window.location.origin}${window.location.pathname}`;
-    const result = account.isAnonymous
+    const result = intent === "upgrade" && account.isAnonymous
       ? await supabase.auth.linkIdentity({ provider: "google", options: { redirectTo } })
       : await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
     if (result.error) setOnlineNotice(`Google пријава није успела: ${result.error.message}`);
     setOnlineLoading(false);
   }
 
-  async function authenticateWithEmail(email: string, password: string, intent: "login" | "upgrade") {
-    if (!supabase) return;
+  async function authenticateWithEmail(email: string, intent: "login" | "upgrade") {
+    if (!supabase) return false;
     setOnlineLoading(true);
     setOnlineNotice("");
+    const emailRedirectTo = `${window.location.origin}${window.location.pathname}`;
     const result = intent === "upgrade"
-      ? await supabase.auth.updateUser({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
+      ? await supabase.auth.updateUser({ email }, { emailRedirectTo })
+      : await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo, shouldCreateUser: false } });
     if (result.error) {
-      setOnlineNotice(`Налог није повезан: ${result.error.message}`);
+      setOnlineNotice(`Имејл није послат: ${result.error.message}`);
     } else {
-      setOnlineNotice(intent === "upgrade" ? "Налог је направљен, а досадашњи напредак је сачуван." : "Успешно си пријављен.");
+      setOnlineNotice(intent === "upgrade"
+        ? "Провери имејл и потврди адресу. Твој досадашњи напредак остаје сачуван."
+        : "Послали смо ти линк за пријаву. Ако имејл приказује код, можеш га унети овде.");
+    }
+    setOnlineLoading(false);
+    return !result.error;
+  }
+
+  async function verifyEmailOtp(email: string, token: string, intent: "login" | "upgrade") {
+    if (!supabase) return false;
+    setOnlineLoading(true);
+    setOnlineNotice("");
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: intent === "upgrade" ? "email_change" : "email",
+    });
+    if (error) {
+      setOnlineNotice(`Код није потврђен: ${error.message}`);
+    } else {
+      setOnlineNotice(intent === "upgrade" ? "Напредак је сачуван и налог је повезан." : "Успешно си пријављен.");
       await refreshPlayerHub();
     }
     setOnlineLoading(false);
+    return !error;
   }
 
   async function signOutAccount() {
@@ -1052,6 +1079,23 @@ export function GamePrototype() {
       setNotice(`Прескакање није успело: ${error.message}`);
     } else {
       applyOnlineMatchState(data as OnlineMatchState);
+    }
+    setSubmitting(false);
+  }
+
+  async function freezeOnlineTime() {
+    if (!supabase || !onlineState || !timeFreezeAvailable || submitting) return;
+    setSubmitting(true);
+    const { data, error } = await supabase.rpc("freeze_match_time", {
+      p_match_id: onlineState.match.id,
+      p_expected_version: onlineState.match.version,
+    });
+    if (error) {
+      setNotice(`Време није замрзнуто: ${error.message}`);
+    } else {
+      applyOnlineMatchState(data as OnlineMatchState);
+      setClockNow(Date.now());
+      setNotice("Време је замрзнуто — добијаш још 30 секунди за овај потез.");
     }
     setSubmitting(false);
   }
@@ -1624,6 +1668,18 @@ export function GamePrototype() {
                 >
                   {exchangeMode ? "Одустани" : "Замени слова"}
                 </button>
+                {isOnline && isTimedMatch && onlineState?.match.status === "active" && (
+                  <button
+                    aria-label={timeFreezeUsed ? "Замрзавање времена је искоришћено" : "Замрзни време и додај 30 секунди"}
+                    className="rack-freeze-action"
+                    disabled={submitting || !timeFreezeAvailable}
+                    onClick={freezeOnlineTime}
+                    title={timeFreezeUsed ? "Искористио си једно замрзавање у овој партији" : "Једном по партији додаје 30 секунди твом потезу"}
+                    type="button"
+                  >
+                    <GameIcon name="clock" /> {timeFreezeUsed ? "Искористио" : "Време +30с"}
+                  </button>
+                )}
                 <span className="bag-count">У врећици <b>{bagCount}</b></span>
               </span>
             </div>
@@ -1828,6 +1884,7 @@ export function GamePrototype() {
           notice={onlineNotice}
           onClose={() => setAccountModalOpen(false)}
           onEmailAuth={authenticateWithEmail}
+          onEmailOtpVerify={verifyEmailOtp}
           onGoogleAuth={authenticateWithGoogle}
           onSignOut={signOutAccount}
         />
