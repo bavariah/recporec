@@ -4010,7 +4010,7 @@ input:focus-visible {
 
 .turn-clock { display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 3px; color: #0e5573; font-variant-numeric: tabular-nums; }
 .turn-clock svg { width: 12px; stroke: currentColor; stroke-width: 2; }
-.turn-clock b { font-size: 11px; }
+.turn-clock b { font-size: 15px; line-height: 1; }
 .turn-clock--urgent { color: #d43f25; animation: clock-urgent .7s ease-in-out infinite alternate; }
 .turn-clock--critical { color: #ef321d; animation-duration: .38s; }
 
@@ -4147,6 +4147,65 @@ input:focus-visible {
 
 .daily-leaderboard li { grid-template-columns: 28px 30px minmax(0, 1fr) auto; }
 .daily-leaderboard li > .player-avatar { width: 28px; height: 28px; border-width: 1px; }
+
+.daily-ranking-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  background: #e8efec;
+  border: 1px solid #d9e4df;
+  border-radius: 11px;
+}
+.daily-ranking-tabs button {
+  min-height: 34px;
+  color: #71807d;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .09em;
+  cursor: pointer;
+}
+.daily-ranking-tabs button.selected {
+  color: #123a72;
+  background: #fff;
+  box-shadow: 0 3px 9px rgba(19,54,104,.1);
+}
+.daily-leaderboard--overall li > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.daily-leaderboard--overall li > span > strong {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.daily-leaderboard--overall li > span > small {
+  overflow: hidden;
+  color: #78868b;
+  font-size: 7px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.daily-leaderboard--overall li > strong:last-child {
+  text-align: right;
+  font-size: 13px;
+}
+.daily-leaderboard--overall li > strong:last-child > small {
+  display: block;
+  color: #84908f;
+  font-size: 6px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
 
 .account-modal__hero > .account-profile-avatar {
   width: 58px;

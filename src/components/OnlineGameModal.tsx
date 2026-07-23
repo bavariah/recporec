@@ -52,7 +52,7 @@ interface OnlineGameModalProps {
 }
 
 function modeLabel(mode: GameMode) {
-  return mode === "quick" ? "Брза · 60 сек" : "Опуштена";
+  return mode === "quick" ? "Брза · 80 сек" : "Опуштена";
 }
 
 function relativeDate(value: string) {
@@ -111,7 +111,7 @@ export function OnlineGameModal({
         {quickSearch ? (
           <div className="matchmaking-wait">
             <span className="matchmaking-radar" aria-hidden="true"><i /><GameIcon name="target" /></span>
-            <small>БРЗА ИГРА · 60 СЕКУНДИ</small>
+            <small>БРЗА ИГРА · 80 СЕКУНДИ</small>
             <strong>Проналазимо слободног играча…</strong>
             <p>Можеш да откажеш претрагу у било ком тренутку.</p>
             <button className="secondary-action modal-action" disabled={loading} onClick={onCancelQuickMatch} type="button">Откажи претрагу</button>
@@ -159,7 +159,7 @@ export function OnlineGameModal({
         {QUICK_MATCHMAKING_VISIBLE && (
           <section className="quick-play-card">
             <span className="quick-play-card__icon"><GameIcon name="clock" /></span>
-            <div><small>ОПЦИЈА 1 · БРЗА ИГРА</small><strong>Пронађи противника</strong><p>Насумичан играч · 60 секунди по потезу · аутоматски прескок</p></div>
+            <div><small>ОПЦИЈА 1 · БРЗА ИГРА</small><strong>Пронађи противника</strong><p>Насумичан играч · 80 секунди по потезу · аутоматски прескок</p></div>
             <button className="primary-action" disabled={loading || !validName} onClick={() => onQuickMatch(displayName.trim())} type="button">{loading ? "ТРАЖИМО…" : "ПРОНАЂИ ИГРАЧА"}<span>→</span></button>
           </section>
         )}
@@ -168,7 +168,7 @@ export function OnlineGameModal({
           <div className="play-hub__section-title"><span><b>1</b><GameIcon name="users" /> ПОЗОВИ ПРИЈАТЕЉА</span></div>
           <p className="play-option-copy">Изабери темпо, направи приватни код и пошаљи га пријатељу.</p>
           <div className="mode-picker" role="radiogroup" aria-label="Режим партије">
-            <button aria-checked={inviteMode === "quick"} className={inviteMode === "quick" ? "selected" : ""} onClick={() => setInviteMode("quick")} role="radio" type="button"><GameIcon name="clock" /><span><strong>Брза игра</strong><small>60 сек по потезу</small></span></button>
+            <button aria-checked={inviteMode === "quick"} className={inviteMode === "quick" ? "selected" : ""} onClick={() => setInviteMode("quick")} role="radio" type="button"><GameIcon name="clock" /><span><strong>Брза игра</strong><small>80 сек по потезу</small></span></button>
             <button aria-checked={inviteMode === "relaxed"} className={inviteMode === "relaxed" ? "selected" : ""} onClick={() => setInviteMode("relaxed")} role="radio" type="button"><GameIcon name="history" /><span><strong>Опуштена</strong><small>Без ограничења</small></span></button>
           </div>
           <button className="secondary-action modal-action create-invite" disabled={loading || !validName} onClick={() => onCreate(displayName.trim(), inviteMode)} type="button">Направи позивни код</button>

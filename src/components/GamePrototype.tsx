@@ -116,6 +116,17 @@ interface DailyChallengeData {
   best: number;
   date: string;
   entries: Array<{ display_name: string; rank: number; score: number; user_id: string } & PlayerProfileAppearance>;
+  overall_count: number;
+  overall_entries: Array<{
+    average_score: number;
+    best_score: number;
+    challenges_played: number;
+    display_name: string;
+    rank: number;
+    total_score: number;
+    user_id: string;
+  } & PlayerProfileAppearance>;
+  overall_rank: number | null;
   rank: number | null;
   streak: number;
 }
@@ -618,10 +629,10 @@ export function GamePrototype() {
     const deadline = match?.turn_deadline ?? null;
     if (!match || !deadline || !isTimedMatch || match.status !== "active" || !canPlayOnline || remainingSeconds === null) return;
 
-    const cue = remainingSeconds === 10
-      ? "warning"
-      : remainingSeconds >= 1 && remainingSeconds <= 5
-        ? `tick-${remainingSeconds}`
+    const cue = remainingSeconds >= 1 && remainingSeconds <= 10
+      ? remainingSeconds === 10
+        ? "warning"
+        : `tick-${remainingSeconds}`
         : remainingSeconds === 0
           ? "expired"
           : null;
