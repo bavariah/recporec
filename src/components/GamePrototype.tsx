@@ -243,6 +243,7 @@ export function GamePrototype() {
   const [soundPalette, setSoundPalette] = useState<SoundPalette>("tactile");
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [localMode, setLocalMode] = useState<"practice" | "daily" | "bot">("practice");
+  const [localGameSession, setLocalGameSession] = useState(0);
   const [dailyBest, setDailyBest] = useState(0);
   const [dailyData, setDailyData] = useState<DailyChallengeData | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
@@ -259,6 +260,7 @@ export function GamePrototype() {
   const rivalDraftTimeoutRef = useRef<number | null>(null);
   const expiringVersionRef = useRef<number | null>(null);
   const timerCueRef = useRef<{ cue: string | null; deadline: string | null }>({ cue: null, deadline: null });
+  const turnStartCueRef = useRef<string | null>(null);
 
   useEffect(() => {
     void loadLocalDictionary().catch(() => undefined);
@@ -699,6 +701,51 @@ export function GamePrototype() {
   const timeFreezeAvailable = Boolean(
     isOnline && isTimedMatch && canPlayOnline && !matchComplete && !timeFreezeUsed && remainingSeconds !== null && remainingSeconds > 0,
   );
+
+  useEffect(() => {
+    let cueKey: string | null = null;
+    let storageKey: string | null = null;
+    const match = onlineState?.match;
+
+    if (isOnline) {
+      if (!match || match.status !== "active" || match.current_player_id !== userId) return;
+      cueKey = `online:${match.id}:${match.turn_number}:${userId}`;
+      storageKey = `skrabaj-turn-start-${match.id}-${match.turn_number}-${userId}`;
+    } else {
+      if (localGameSession === 0 || matchComplete || botThinking) return;
+      cueKey = `local:${localGameSession}:${localMode}:${game.turn}`;
+    }
+
+    if (turnStartCueRef.current === cueKey) return;
+    turnStartCueRef.current = cueKey;
+
+    if (storageKey) {
+      try {
+        if (window.sessionStorage.getItem(storageKey) === "played") return;
+        window.sessionStorage.setItem(storageKey, "played");
+      } catch {
+        // A blocked session store should not prevent the turn-start cue.
+      }
+    }
+
+    if (!soundEnabled) return;
+    const timer = window.setTimeout(() => {
+      void playGameSound("turnStarted", soundPalette).catch(() => undefined);
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [
+    botThinking,
+    game.turn,
+    isOnline,
+    localGameSession,
+    localMode,
+    matchComplete,
+    onlineState?.match,
+    soundEnabled,
+    soundPalette,
+    userId,
+  ]);
+
   const resultKind: GameResultKind = localMode === "bot"
     ? game.score === botScore ? "draw" : game.score > botScore ? "win" : "lose"
     : isOnline
@@ -787,6 +834,7 @@ export function GamePrototype() {
     setHistoryOpen(false);
     setLastRejectedWords([]);
     setLocalMode("practice");
+    setLocalGameSession((current) => current + 1);
     setBotRack([]);
     setBotScore(0);
     setBotThinking(false);
@@ -806,6 +854,7 @@ export function GamePrototype() {
     setHistoryOpen(false);
     setLastRejectedWords([]);
     setLocalMode("daily");
+    setLocalGameSession((current) => current + 1);
     setGame(buildNewGame(seededRandom(dailySeed())));
     resetSelection();
     setNotice("Дневни изазов је почео. Имаш пет потеза са истим словима као и сви данас.");
@@ -834,6 +883,7 @@ export function GamePrototype() {
     setHistoryOpen(false);
     setLastRejectedWords([]);
     setLocalMode("bot");
+    setLocalGameSession((current) => current + 1);
     setGame(session.game);
     setBotRack(session.botRack);
     setBotScore(0);

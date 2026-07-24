@@ -39,7 +39,7 @@ export function SoundSettingsModal({ enabled, onClose, onEnabledChange, onPalett
         <div className="sound-master-row">
           <span>
             <strong>Звук у игри</strong>
-            <small>Потези, успех и одбијене речи</small>
+            <small>Почетак рунде, потези, успех и одбијене речи</small>
           </span>
           <button
             aria-pressed={enabled}

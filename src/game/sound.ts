@@ -2,6 +2,7 @@ export type GameSoundKind =
   | "accepted"
   | "placed"
   | "rejected"
+  | "turnStarted"
   | "timerExpired"
   | "timerTick"
   | "timerWarning";
@@ -109,6 +110,11 @@ const soundPatterns: Record<SoundPalette, Record<GameSoundKind, (context: AudioC
       tone(context, { duration: 0.16, frequency: 210, slideTo: 125, type: "triangle", volume: 0.055 });
       tone(context, { duration: 0.13, frequency: 145, offset: 0.105, slideTo: 105, type: "sine", volume: 0.04 });
     },
+    turnStarted(context) {
+      tap(context, 0, 0.034, 720);
+      tone(context, { duration: 0.13, frequency: 148, slideTo: 102, type: "sine", volume: 0.052 });
+      tone(context, { duration: 0.11, frequency: 205, offset: 0.11, slideTo: 158, type: "sine", volume: 0.034 });
+    },
     timerWarning(context) {
       tap(context, 0, 0.026, 620);
       tone(context, { duration: 0.12, frequency: 160, slideTo: 108, type: "sine", volume: 0.045 });
@@ -136,6 +142,10 @@ const soundPatterns: Record<SoundPalette, Record<GameSoundKind, (context: AudioC
     rejected(context) {
       tone(context, { duration: 0.2, frequency: 260, slideTo: 105, type: "sawtooth", volume: 0.034 });
       tap(context, 0.1, 0.025, 420);
+    },
+    turnStarted(context) {
+      tone(context, { duration: 0.075, frequency: 310, slideTo: 390, type: "square", volume: 0.024 });
+      tone(context, { duration: 0.09, frequency: 420, offset: 0.09, slideTo: 510, type: "square", volume: 0.022 });
     },
     timerWarning(context) {
       tone(context, { duration: 0.09, frequency: 330, slideTo: 270, type: "square", volume: 0.025 });
